@@ -26,12 +26,11 @@ function App() {
     async (settings: {
       appId: string;
       accessKey: string;
-      resourceId: string;
       microphoneDevice: string;
       outputMode?: string;
       autoOutput?: boolean;
     }) => {
-      if (!settings.appId || !settings.accessKey || !settings.resourceId) {
+      if (!settings.appId || !settings.accessKey) {
         return;
       }
 
@@ -74,7 +73,6 @@ function App() {
         await invoke("cmd_start_recording", {
           appId: settings.appId,
           accessKey: settings.accessKey,
-          resourceId: settings.resourceId,
           deviceName: settings.microphoneDevice,
         });
         setRecording(true);

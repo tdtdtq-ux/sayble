@@ -155,14 +155,15 @@ pub struct HotkeyConfig {
     pub binding: HotkeyBinding,
 }
 
+/// 固定的 ASR Resource ID
+pub const ASR_RESOURCE_ID: &str = "volc.seedasr.sauc.duration";
+
 /// 火山引擎 ASR 配置（v3 大模型流式语音识别）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AsrConfig {
     pub app_id: String,
     #[serde(alias = "access_token")]
     pub access_key: String,
-    #[serde(alias = "cluster")]
-    pub resource_id: String,
     /// 优先语言: "zh", "en", "auto"
     pub language: String,
     /// 是否自动添加标点
@@ -174,7 +175,6 @@ impl Default for AsrConfig {
         Self {
             app_id: String::new(),
             access_key: String::new(),
-            resource_id: "volc.bigasr.sauc.duration".to_string(),
             language: "zh".to_string(),
             auto_punctuation: true,
         }

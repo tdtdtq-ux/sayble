@@ -17,7 +17,6 @@ fn test_config_to_asr_validation_flow() {
     let valid_config = AsrConfig {
         app_id: "test_app_id".to_string(),
         access_key: "test_key".to_string(),
-        resource_id: "volc.bigasr.sauc.duration".to_string(),
         language: "zh".to_string(),
         auto_punctuation: true,
     };
@@ -92,7 +91,6 @@ fn test_full_config_persistence_flow() {
         asr: AsrConfig {
             app_id: "my_app".to_string(),
             access_key: "my_key".to_string(),
-            resource_id: "volc.bigasr.sauc.duration".to_string(),
             language: "zh".to_string(),
             auto_punctuation: true,
         },
@@ -254,8 +252,6 @@ async fn test_asr_with_mp3_file() {
     let config = AsrConfig {
         app_id: std::env::var("ASR_APP_ID").expect("ASR_APP_ID not set"),
         access_key: std::env::var("ASR_ACCESS_KEY").expect("ASR_ACCESS_KEY not set"),
-        resource_id: std::env::var("ASR_RESOURCE_ID")
-            .unwrap_or_else(|_| "volc.bigasr.sauc.duration".to_string()),
         ..Default::default()
     };
 

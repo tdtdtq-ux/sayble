@@ -24,7 +24,6 @@ interface AudioDevice {
 interface AppSettings {
   appId: string;
   accessKey: string;
-  resourceId: string;
   language: string;
   autoPunctuation: boolean;
   outputMode: "Clipboard" | "SimulateKeyboard";
@@ -38,7 +37,6 @@ interface AppSettings {
 const defaultSettings: AppSettings = {
   appId: "",
   accessKey: "",
-  resourceId: "volc.bigasr.sauc.duration",
   language: "zh",
   autoPunctuation: true,
   outputMode: "Clipboard",
@@ -53,7 +51,6 @@ export interface SettingsHandle {
   getRecordingParams: () => {
     appId: string;
     accessKey: string;
-    resourceId: string;
     microphoneDevice: string;
     outputMode: "Clipboard" | "SimulateKeyboard";
     autoOutput: boolean;
@@ -65,7 +62,6 @@ interface SettingsProps {
   onStartRecording: (settings: {
     appId: string;
     accessKey: string;
-    resourceId: string;
     microphoneDevice: string;
   }) => void;
   onStopRecording: () => void;
@@ -83,12 +79,11 @@ export const Settings = forwardRef<SettingsHandle, SettingsProps>(
     getRecordingParams: () => ({
       appId: settings.appId,
       accessKey: settings.accessKey,
-      resourceId: settings.resourceId,
       microphoneDevice: settings.microphoneDevice,
       outputMode: settings.outputMode,
       autoOutput: settings.autoOutput,
     }),
-  }), [settings.appId, settings.accessKey, settings.resourceId, settings.microphoneDevice, settings.outputMode, settings.autoOutput]);
+  }), [settings.appId, settings.accessKey, settings.microphoneDevice, settings.outputMode, settings.autoOutput]);
 
   useEffect(() => {
     loadDevices();
@@ -134,14 +129,13 @@ export const Settings = forwardRef<SettingsHandle, SettingsProps>(
     setTesting(true);
     setTestResult(null);
     try {
-      if (!settings.appId || !settings.accessKey || !settings.resourceId) {
+      if (!settings.appId || !settings.accessKey) {
         setTestResult("请先填写完整的 API 配置");
         return;
       }
       const msg = await invoke<string>("cmd_test_asr_connection", {
         appId: settings.appId,
         accessKey: settings.accessKey,
-        resourceId: settings.resourceId,
       });
       setTestResult(msg);
     } catch (e) {
@@ -158,7 +152,6 @@ export const Settings = forwardRef<SettingsHandle, SettingsProps>(
       onStartRecording({
         appId: settings.appId,
         accessKey: settings.accessKey,
-        resourceId: settings.resourceId,
         microphoneDevice: settings.microphoneDevice,
       });
     }
@@ -210,15 +203,6 @@ export const Settings = forwardRef<SettingsHandle, SettingsProps>(
                   placeholder="输入 Access Key"
                   value={settings.accessKey}
                   onChange={(e) => updateSetting("accessKey", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="resourceId">Resource ID</Label>
-                <Input
-                  id="resourceId"
-                  placeholder="输入 Resource ID"
-                  value={settings.resourceId}
-                  onChange={(e) => updateSetting("resourceId", e.target.value)}
                 />
               </div>
               <Separator />

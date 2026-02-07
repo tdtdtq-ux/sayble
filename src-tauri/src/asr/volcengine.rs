@@ -1,7 +1,7 @@
 use crate::asr::protocol::{
     build_audio_request, build_full_client_request, parse_server_response, AsrRequest,
 };
-use crate::config::AsrConfig;
+use crate::config::{AsrConfig, ASR_RESOURCE_ID};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
@@ -59,9 +59,6 @@ impl VolcEngineAsr {
         }
         if config.access_key.trim().is_empty() {
             return Err("Access Key 不能为空".to_string());
-        }
-        if config.resource_id.trim().is_empty() {
-            return Err("Resource ID 不能为空".to_string());
         }
         Ok(())
     }
@@ -142,7 +139,7 @@ fn build_ws_request(config: &AsrConfig, connect_id: &str) -> Result<tungstenite:
         )
         .header("X-Api-App-Key", &config.app_id)
         .header("X-Api-Access-Key", &config.access_key)
-        .header("X-Api-Resource-Id", &config.resource_id)
+        .header("X-Api-Resource-Id", ASR_RESOURCE_ID)
         .header("X-Api-Connect-Id", connect_id)
         .body(())
         .map_err(|e| format!("Request build error: {}", e))
@@ -359,7 +356,6 @@ mod tests {
         let new_config = AsrConfig {
             app_id: "new_app".to_string(),
             access_key: "new_key".to_string(),
-            resource_id: "new_resource".to_string(),
             ..Default::default()
         };
         asr.update_config(new_config);
@@ -373,7 +369,6 @@ mod tests {
         let config = AsrConfig {
             app_id: "".to_string(),
             access_key: "key".to_string(),
-            resource_id: "resource".to_string(),
             ..Default::default()
         };
         let result = VolcEngineAsr::validate_config(&config);
@@ -386,7 +381,6 @@ mod tests {
         let config = AsrConfig {
             app_id: "app".to_string(),
             access_key: "".to_string(),
-            resource_id: "resource".to_string(),
             ..Default::default()
         };
         let result = VolcEngineAsr::validate_config(&config);
@@ -395,24 +389,10 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_config_empty_resource_id() {
-        let config = AsrConfig {
-            app_id: "app".to_string(),
-            access_key: "key".to_string(),
-            resource_id: "  ".to_string(),
-            ..Default::default()
-        };
-        let result = VolcEngineAsr::validate_config(&config);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Resource ID"));
-    }
-
-    #[test]
     fn test_validate_config_valid() {
         let config = AsrConfig {
             app_id: "app".to_string(),
             access_key: "key".to_string(),
-            resource_id: "resource".to_string(),
             ..Default::default()
         };
         assert!(VolcEngineAsr::validate_config(&config).is_ok());
@@ -460,8 +440,6 @@ mod tests {
         let config = AsrConfig {
             app_id: std::env::var("ASR_APP_ID").expect("ASR_APP_ID not set"),
             access_key: std::env::var("ASR_ACCESS_KEY").expect("ASR_ACCESS_KEY not set"),
-            resource_id: std::env::var("ASR_RESOURCE_ID")
-                .unwrap_or_else(|_| "volc.bigasr.sauc.duration".to_string()),
             ..Default::default()
         };
 

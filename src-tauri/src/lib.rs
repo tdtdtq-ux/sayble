@@ -152,12 +152,10 @@ fn cmd_output_text(text: String, mode: OutputMode) -> Result<(), String> {
 async fn cmd_test_asr_connection(
     app_id: String,
     access_key: String,
-    resource_id: String,
 ) -> Result<String, String> {
     let config = AsrConfig {
         app_id,
         access_key,
-        resource_id,
         ..Default::default()
     };
     asr::volcengine::test_connection(&config).await
@@ -203,7 +201,6 @@ async fn cmd_start_recording(
     flag: tauri::State<'_, Arc<Mutex<RecordingFlag>>>,
     app_id: String,
     access_key: String,
-    resource_id: String,
     device_name: String,
 ) -> Result<(), String> {
     // 检查是否已在录音
@@ -217,7 +214,6 @@ async fn cmd_start_recording(
     let asr_config = AsrConfig {
         app_id,
         access_key,
-        resource_id,
         ..Default::default()
     };
 

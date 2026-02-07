@@ -66,10 +66,10 @@ Rust，按功能模块划分：
 ### Tauri Commands（前后端 IPC 接口）
 
 - `cmd_list_audio_devices()` — 枚举音频输入设备
-- `cmd_start_recording(appId, accessKey, resourceId, deviceName)` — 开始录音和 ASR 识别
+- `cmd_start_recording(appId, accessKey, deviceName)` — 开始录音和 ASR 识别
 - `cmd_stop_recording()` — 停止录音
 - `cmd_output_text(text, mode)` — 通过剪贴板或键盘模拟输出文字
-- `cmd_test_asr_connection(appId, accessKey, resourceId)` — 测试 ASR 连接
+- `cmd_test_asr_connection(appId, accessKey)` — 测试 ASR 连接
 - `cmd_save_settings(app, settings)` / `cmd_load_settings(app)` — 设置持久化
 
 ### 关键依赖
