@@ -26,17 +26,12 @@ export function FloatingWindow({
     } else {
       setVisible(true);
     }
-
-    if (status === "done") {
-      const timer = setTimeout(() => setVisible(false), 2000);
-      return () => clearTimeout(timer);
-    }
   }, [status]);
 
   if (!visible) return null;
 
   return (
-    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50">
+    <div className="p-2">
       <div
         className={cn(
           "rounded-xl border bg-card px-6 py-4 shadow-lg backdrop-blur-sm",

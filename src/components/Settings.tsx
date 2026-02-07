@@ -1,6 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,23 +49,50 @@ const defaultSettings: AppSettings = {
   holdHotkey: "左Ctrl + Space",
 };
 
-export function Settings() {
+export interface SettingsHandle {
+  getRecordingParams: () => {
+    appId: string;
+    accessKey: string;
+    resourceId: string;
+    microphoneDevice: string;
+    outputMode: "Clipboard" | "SimulateKeyboard";
+    autoOutput: boolean;
+  };
+}
+
+interface SettingsProps {
+  recording: boolean;
+  onStartRecording: (settings: {
+    appId: string;
+    accessKey: string;
+    resourceId: string;
+    microphoneDevice: string;
+  }) => void;
+  onStopRecording: () => void;
+}
+
+export const Settings = forwardRef<SettingsHandle, SettingsProps>(
+  function Settings({ recording, onStartRecording, onStopRecording }, ref) {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [asrText, setAsrText] = useState("");
-  const [asrStatus, setAsrStatus] = useState<string | null>(null);
-  const unlistenRef = useRef<UnlistenFn | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    getRecordingParams: () => ({
+      appId: settings.appId,
+      accessKey: settings.accessKey,
+      resourceId: settings.resourceId,
+      microphoneDevice: settings.microphoneDevice,
+      outputMode: settings.outputMode,
+      autoOutput: settings.autoOutput,
+    }),
+  }), [settings.appId, settings.accessKey, settings.resourceId, settings.microphoneDevice, settings.outputMode, settings.autoOutput]);
 
   useEffect(() => {
     loadDevices();
     loadSettings();
-    return () => {
-      unlistenRef.current?.();
-    };
   }, []);
 
   const loadSettings = async () => {
@@ -125,100 +151,33 @@ export function Settings() {
     }
   };
 
-  const handleToggleRecording = async () => {
+  const handleToggleRecording = () => {
     if (recording) {
-      try {
-        await invoke("cmd_stop_recording");
-        setRecording(false);
-        setAsrStatus("已停止录音，等待识别结果...");
-      } catch (e) {
-        setAsrStatus(`停止失败: ${e}`);
-      }
+      onStopRecording();
     } else {
-      if (!settings.appId || !settings.accessKey || !settings.resourceId) {
-        setAsrStatus("请先在 API 配置 Tab 填写完整的认证信息");
-        return;
-      }
-      try {
-        setAsrText("");
-        setAsrStatus(null);
-        // 先注册 ASR 事件监听
-        unlistenRef.current?.();
-        const unlisten = await listen<{ PartialResult?: string; FinalResult?: string; Error?: string; Connected?: null; Disconnected?: null }>("asr-event", (event) => {
-          const payload = event.payload;
-          if (typeof payload === "string") {
-            // 简单字符串事件如 "Connected"
-            if (payload === "Connected") setAsrStatus("ASR 已连接");
-            else if (payload === "Disconnected") {
-              setAsrStatus("ASR 已断开");
-              setRecording(false);
-            }
-          } else if (payload && typeof payload === "object") {
-            if ("PartialResult" in payload && payload.PartialResult) {
-              setAsrText(payload.PartialResult);
-              setAsrStatus("识别中...");
-            } else if ("FinalResult" in payload && payload.FinalResult) {
-              setAsrText(payload.FinalResult);
-              setAsrStatus("识别完成");
-              setRecording(false);
-            } else if ("Error" in payload && payload.Error) {
-              setAsrStatus(`错误: ${payload.Error}`);
-              setRecording(false);
-            } else if ("Connected" in payload) {
-              setAsrStatus("ASR 已连接");
-            } else if ("Disconnected" in payload) {
-              setAsrStatus("ASR 已断开");
-              setRecording(false);
-            }
-          }
-        });
-        unlistenRef.current = unlisten;
-
-        await invoke("cmd_start_recording", {
-          appId: settings.appId,
-          accessKey: settings.accessKey,
-          resourceId: settings.resourceId,
-          deviceName: settings.microphoneDevice,
-        });
-        setRecording(true);
-        setAsrStatus("录音中...");
-      } catch (e) {
-        setAsrStatus(`启动失败: ${e}`);
-      }
+      onStartRecording({
+        appId: settings.appId,
+        accessKey: settings.accessKey,
+        resourceId: settings.resourceId,
+        microphoneDevice: settings.microphoneDevice,
+      });
     }
   };
 
   return (
     <div className="mx-auto max-w-2xl p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">设置</h1>
-        <p className="text-sm text-muted-foreground">配置 Voice Keyboard 的各项参数</p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">设置</h1>
+          <p className="text-sm text-muted-foreground">配置 Voice Keyboard 的各项参数</p>
+        </div>
+        <Button
+          variant={recording ? "destructive" : "default"}
+          onClick={handleToggleRecording}
+        >
+          {recording ? "停止录音" : "开始录音"}
+        </Button>
       </div>
-
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>语音识别测试</CardTitle>
-          <CardDescription>点击按钮开始录音，说完后点击停止，查看识别结果</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-4">
-            <Button
-              variant={recording ? "destructive" : "default"}
-              onClick={handleToggleRecording}
-            >
-              {recording ? "停止录音" : "开始录音"}
-            </Button>
-            {asrStatus && (
-              <span className="text-sm text-muted-foreground">{asrStatus}</span>
-            )}
-          </div>
-          {asrText && (
-            <div className="rounded-md border bg-muted/50 p-3">
-              <p className="text-sm font-mono whitespace-pre-wrap">{asrText}</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       <Tabs defaultValue="api" className="space-y-6">
         <TabsList className="grid w-full grid-cols-3">
@@ -402,4 +361,4 @@ export function Settings() {
       </div>
     </div>
   );
-}
+});

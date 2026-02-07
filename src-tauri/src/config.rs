@@ -55,6 +55,90 @@ impl Default for HotkeyBinding {
     }
 }
 
+impl HotkeyBinding {
+    /// 将前端快捷键字符串（如 "右Ctrl"、"左Ctrl + Space"）解析为 HotkeyBinding
+    pub fn parse_from_label(label: &str) -> Option<Self> {
+        if label.is_empty() {
+            return None;
+        }
+
+        let parts: Vec<&str> = label.split('+').map(|s| s.trim()).collect();
+        let mut modifiers = Vec::new();
+        let mut key: u32 = 0;
+
+        for part in &parts {
+            if let Some(m) = Modifier::from_label(part) {
+                modifiers.push(m);
+            } else {
+                // 非修饰键，解析为 VK code
+                key = key_label_to_vk(part)?;
+            }
+        }
+
+        if modifiers.is_empty() && key == 0 {
+            return None;
+        }
+
+        Some(HotkeyBinding { modifiers, key })
+    }
+}
+
+impl Modifier {
+    pub fn from_label(label: &str) -> Option<Self> {
+        match label {
+            "左Ctrl" => Some(Modifier::LeftCtrl),
+            "右Ctrl" => Some(Modifier::RightCtrl),
+            "左Alt" => Some(Modifier::LeftAlt),
+            "右Alt" => Some(Modifier::RightAlt),
+            "左Shift" => Some(Modifier::LeftShift),
+            "右Shift" => Some(Modifier::RightShift),
+            _ => None,
+        }
+    }
+}
+
+/// 将前端键名标签转换为 Windows VK code
+fn key_label_to_vk(label: &str) -> Option<u32> {
+    match label {
+        "Space" => Some(0x20),
+        "Enter" => Some(0x0D),
+        "Esc" => Some(0x1B),
+        "Backspace" => Some(0x08),
+        "Tab" => Some(0x09),
+        "Delete" => Some(0x2E),
+        "Up" => Some(0x26),
+        "Down" => Some(0x28),
+        "Left" => Some(0x25),
+        "Right" => Some(0x27),
+        "F1" => Some(0x70),
+        "F2" => Some(0x71),
+        "F3" => Some(0x72),
+        "F4" => Some(0x73),
+        "F5" => Some(0x74),
+        "F6" => Some(0x75),
+        "F7" => Some(0x76),
+        "F8" => Some(0x77),
+        "F9" => Some(0x78),
+        "F10" => Some(0x79),
+        "F11" => Some(0x7A),
+        "F12" => Some(0x7B),
+        _ => {
+            // 单个字母 A-Z
+            let chars: Vec<char> = label.chars().collect();
+            if chars.len() == 1 {
+                let c = chars[0].to_ascii_uppercase();
+                if c.is_ascii_uppercase() {
+                    return Some(c as u32); // VK_A=0x41 .. VK_Z=0x5A
+                }
+                if c.is_ascii_digit() {
+                    return Some(c as u32); // VK_0=0x30 .. VK_9=0x39
+                }
+            }
+            None
+        }
+    }
+}
+
 /// 快捷键触发模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum HotkeyMode {

@@ -7,7 +7,7 @@ pub mod tray;
 
 use asr::volcengine::{AsrEvent, VolcEngineAsr};
 use audio::AudioCapture;
-use config::{AppConfig, AsrConfig, OutputMode};
+use config::{AppConfig, AsrConfig, HotkeyBinding, HotkeyConfig, HotkeyMode, OutputMode};
 use hotkey::HotkeyManager;
 use input::{ClipboardOutput, SimulateOutput};
 use tray::TrayManager;
@@ -25,6 +25,40 @@ struct RecordingFlag {
     stop_tx: Option<std::sync::mpsc::Sender<()>>,
 }
 
+/// 从前端快捷键标签字符串解析为 HotkeyConfig 列表
+fn parse_hotkey_configs(toggle_label: &str, hold_label: &str) -> Vec<HotkeyConfig> {
+    let mut configs = Vec::new();
+    if let Some(binding) = HotkeyBinding::parse_from_label(toggle_label) {
+        log::info!("[hotkey] parsed toggle binding: {:?} from \"{}\"", binding, toggle_label);
+        configs.push(HotkeyConfig {
+            mode: HotkeyMode::Toggle,
+            binding,
+        });
+    }
+    if let Some(binding) = HotkeyBinding::parse_from_label(hold_label) {
+        log::info!("[hotkey] parsed hold binding: {:?} from \"{}\"", binding, hold_label);
+        configs.push(HotkeyConfig {
+            mode: HotkeyMode::HoldToRecord,
+            binding,
+        });
+    }
+    configs
+}
+
+/// 从持久化 store 中读取快捷键标签，解析为 HotkeyConfig 列表
+fn load_hotkey_configs_from_store(app: &tauri::AppHandle) -> Option<Vec<HotkeyConfig>> {
+    let store = app.store("settings.json").ok()?;
+    let settings = store.get("app_settings")?;
+    let toggle = settings.get("toggleHotkey")?.as_str()?;
+    let hold = settings.get("holdHotkey")?.as_str()?;
+    let configs = parse_hotkey_configs(toggle, hold);
+    if configs.is_empty() {
+        None
+    } else {
+        Some(configs)
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::init();
@@ -37,13 +71,44 @@ pub fn run() {
             let handle = app.handle().clone();
             TrayManager::setup(&handle)?;
 
-            // 使用默认配置初始化 HotkeyManager 并存入 Tauri State
-            let default_config = AppConfig::default();
-            let manager = HotkeyManager::new(vec![
-                default_config.toggle_hotkey,
-                default_config.hold_hotkey,
-            ]);
-            app.manage(Arc::new(Mutex::new(manager)));
+            // 初始化 HotkeyManager：优先从持久化设置加载，否则用默认配置
+            let hotkey_configs = load_hotkey_configs_from_store(&handle)
+                .unwrap_or_else(|| {
+                    let default_config = AppConfig::default();
+                    vec![default_config.toggle_hotkey, default_config.hold_hotkey]
+                });
+            log::info!("[hotkey] initial configs: {:?}", hotkey_configs);
+            let mut manager = HotkeyManager::new(hotkey_configs);
+            if let Err(e) = manager.start() {
+                log::error!("Failed to start hotkey manager: {}", e);
+            }
+            let manager = Arc::new(Mutex::new(manager));
+            app.manage(manager.clone());
+
+            // 后台线程：轮询 HotkeyManager 事件并 emit 到前端
+            let hotkey_handle = handle.clone();
+            log::info!("Hotkey manager running: {}", manager.lock().map(|m| m.is_running()).unwrap_or(false));
+            std::thread::spawn(move || {
+                log::info!("[hotkey-forward] thread started");
+                loop {
+                    let event = {
+                        let mgr = manager.lock().unwrap_or_else(|e| e.into_inner());
+                        if !mgr.is_running() {
+                            log::warn!("[hotkey-forward] manager not running, exiting thread");
+                            break;
+                        }
+                        mgr.try_recv()
+                    };
+                    if let Some(ref event) = event {
+                        log::info!("[hotkey-forward] received event: {:?}, emitting to frontend", event);
+                        let result = hotkey_handle.emit("hotkey-event", &event);
+                        log::info!("[hotkey-forward] emit result: {:?}", result);
+                    } else {
+                        std::thread::sleep(std::time::Duration::from_millis(50));
+                    }
+                }
+                log::info!("[hotkey-forward] thread exiting");
+            });
 
             // 录音状态标志
             app.manage(Arc::new(Mutex::new(RecordingFlag {
@@ -99,12 +164,28 @@ async fn cmd_test_asr_connection(
 }
 
 #[tauri::command]
-fn cmd_save_settings(app: tauri::AppHandle, settings: serde_json::Value) -> Result<(), String> {
+fn cmd_save_settings(
+    app: tauri::AppHandle,
+    hotkey_mgr: tauri::State<'_, Arc<Mutex<HotkeyManager>>>,
+    settings: serde_json::Value,
+) -> Result<(), String> {
     let store = app
         .store("settings.json")
         .map_err(|e| format!("Failed to open store: {}", e))?;
-    store.set("app_settings", settings);
+    store.set("app_settings", settings.clone());
     store.save().map_err(|e| format!("Failed to save store: {}", e))?;
+
+    // 同步快捷键配置到 HotkeyManager
+    let toggle = settings.get("toggleHotkey").and_then(|v| v.as_str()).unwrap_or("");
+    let hold = settings.get("holdHotkey").and_then(|v| v.as_str()).unwrap_or("");
+    let configs = parse_hotkey_configs(toggle, hold);
+    if !configs.is_empty() {
+        if let Ok(mgr) = hotkey_mgr.lock() {
+            log::info!("[hotkey] updating configs on save: {:?}", configs);
+            mgr.update_configs(configs);
+        }
+    }
+
     Ok(())
 }
 

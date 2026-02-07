@@ -35,15 +35,20 @@ cd src-tauri && cargo test
 
 React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 
-- **App.tsx** → 根组件，渲染 Settings
-- **Settings.tsx** — 主设置界面（音频设备选择、热键配置、输出模式等）
-- **FloatingWindow.tsx** — 语音输入时的悬浮窗
+多窗口架构，通过 URL 参数 `?window=floating` 区分窗口类型：
+
+- **main.tsx** → 入口，根据 URL 参数渲染 `<App />` 或 `<FloatingApp />`
+- **App.tsx** → 主窗口根组件，管理录音状态，通过 `emit("floating-control")` 与浮窗通信
+- **TitleBar.tsx** — 自定义标题栏（主窗口无系统装饰，使用自定义拖拽标题栏）
+- **Settings.tsx** — 主设置界面（API 配置、热键配置、输出模式、麦克风选择等）
+- **FloatingApp.tsx** — 浮窗入口，独立窗口，监听 ASR/热键/控制事件，管理文字输出
+- **FloatingWindow.tsx** — 浮窗 UI 组件（录音状态指示、实时识别文字、计时器）
 - **HotkeyRecorder.tsx** — 快捷键录制组件
 - **components/ui/** — shadcn/ui 组件库（button, card, input, select 等）
 
 路径别名：`@/*` → `./src/*`
 
-无全局状态管理库，使用 React hooks + Tauri plugin-store 持久化。无路由，单页应用。
+无全局状态管理库，使用 React hooks + Tauri plugin-store 持久化。跨窗口通信使用 Tauri 事件系统。
 
 ### 后端 (src-tauri/src/)
 
@@ -61,7 +66,10 @@ Rust，按功能模块划分：
 ### Tauri Commands（前后端 IPC 接口）
 
 - `cmd_list_audio_devices()` — 枚举音频输入设备
+- `cmd_start_recording(appId, accessKey, resourceId, deviceName)` — 开始录音和 ASR 识别
+- `cmd_stop_recording()` — 停止录音
 - `cmd_output_text(text, mode)` — 通过剪贴板或键盘模拟输出文字
+- `cmd_test_asr_connection(appId, accessKey, resourceId)` — 测试 ASR 连接
 - `cmd_save_settings(app, settings)` / `cmd_load_settings(app)` — 设置持久化
 
 ### 关键依赖
@@ -77,7 +85,7 @@ Vitest + jsdom 环境 + @testing-library/react。测试文件放在对应目录�
 
 ## Platform Notes
 
-当前主要面向 Windows 平台（hotkey 模块使用 Windows API 键盘钩子）。主窗口默认可见（`visible: true`）。
+当前主要面向 Windows 平台（hotkey 模块使用 Windows API 键盘钩子）。主窗口无系统装饰（`decorations: false`），使用自定义标题栏。浮窗为独立透明窗口（`transparent: true, alwaysOnTop: true`），不显示在任务栏。
 
 ## Work Rules
 

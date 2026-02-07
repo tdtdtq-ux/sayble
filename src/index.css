@@ -51,4 +51,10 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
+  /* floating 窗口：透明背景、无滚动条 */
+  html.floating-window,
+  html.floating-window body {
+    background: transparent;
+    overflow: hidden;
+  }
 }

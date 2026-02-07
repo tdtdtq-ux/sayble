@@ -12,10 +12,26 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Voice Keyboard",
         "width": 800,
         "height": 600,
-        "visible": true
+        "visible": true,
+        "decorations": false
+      },
+      {
+        "label": "floating",
+        "url": "index.html?window=floating",
+        "title": "",
+        "width": 400,
+        "height": 80,
+        "visible": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "resizable": false,
+        "skipTaskbar": true,
+        "center": true
       }
     ],
     "security": {
