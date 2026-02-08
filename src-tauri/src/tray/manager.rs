@@ -36,7 +36,7 @@ impl TrayManager {
 
         let _tray = TrayIconBuilder::new()
             .icon(Image::from_bytes(include_bytes!("../../icons/32x32.png"))?)
-            .tooltip("Voice Keyboard - 空闲")
+            .tooltip("Sayble - 空闲")
             .menu(&menu)
             .on_menu_event(move |app, event| {
                 match event.id().as_ref() {
@@ -48,7 +48,7 @@ impl TrayManager {
                         }
                     }
                     "about" => {
-                        log::info!("Voice Keyboard v0.1.0");
+                        log::info!("Sayble v0.1.0");
                     }
                     "quit" => {
                         app.exit(0);
@@ -78,9 +78,9 @@ impl TrayManager {
         }
 
         let tooltip = match new_state {
-            AppState::Idle => "Voice Keyboard - 空闲",
-            AppState::Recording => "Voice Keyboard - 录音中...",
-            AppState::Recognizing => "Voice Keyboard - 识别中...",
+            AppState::Idle => "Sayble - 空闲",
+            AppState::Recording => "Sayble - 录音中...",
+            AppState::Recognizing => "Sayble - 识别中...",
         };
 
         if let Some(tray) = app.tray_by_id("main") {

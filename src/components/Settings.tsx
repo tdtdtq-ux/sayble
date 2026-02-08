@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
+import { useState, useEffect, useCallback, useImperativeHandle, type Ref } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -12,9 +12,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { HotkeyRecorder } from "./HotkeyRecorder";
+import { AppIcon } from "./AppIcon";
+import { Key, Keyboard, Settings2, Plug, RefreshCw, Save, Check } from "lucide-react";
 
 interface AudioDevice {
   name: string;
@@ -59,6 +61,7 @@ export interface SettingsHandle {
 
 interface SettingsProps {
   recording: boolean;
+  ref?: Ref<SettingsHandle>;
   onStartRecording: (settings: {
     appId: string;
     accessKey: string;
@@ -67,13 +70,13 @@ interface SettingsProps {
   onStopRecording: () => void;
 }
 
-export const Settings = forwardRef<SettingsHandle, SettingsProps>(
-  function Settings({ recording, onStartRecording, onStopRecording }, ref) {
+export function Settings({ recording, onStartRecording, onStopRecording, ref }: SettingsProps) {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [activeTab, setActiveTab] = useState("api");
 
   useImperativeHandle(ref, () => ({
     getRecordingParams: () => ({
@@ -145,89 +148,78 @@ export const Settings = forwardRef<SettingsHandle, SettingsProps>(
     }
   };
 
-  const handleToggleRecording = () => {
-    if (recording) {
-      onStopRecording();
-    } else {
-      onStartRecording({
-        appId: settings.appId,
-        accessKey: settings.accessKey,
-        microphoneDevice: settings.microphoneDevice,
-      });
-    }
-  };
-
   return (
-    <div className="mx-auto max-w-2xl p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">设置</h1>
-          <p className="text-sm text-muted-foreground">配置 Voice Keyboard 的各项参数</p>
+    <div className="mx-auto max-w-2xl h-full flex flex-col">
+      <div className="shrink-0 px-6 pt-6 pb-4">
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+              <AppIcon className="size-6" />
+              Sayble
+            </h1>
+          </div>
         </div>
-        <Button
-          variant={recording ? "destructive" : "default"}
-          onClick={handleToggleRecording}
-        >
-          {recording ? "停止录音" : "开始录音"}
-        </Button>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-0">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="api"><Key className="size-4 mr-1.5" />API 配置</TabsTrigger>
+            <TabsTrigger value="hotkey"><Keyboard className="size-4 mr-1.5" />快捷键</TabsTrigger>
+            <TabsTrigger value="general"><Settings2 className="size-4 mr-1.5" />通用</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
-      <Tabs defaultValue="api" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="api">API 配置</TabsTrigger>
-          <TabsTrigger value="hotkey">快捷键</TabsTrigger>
-          <TabsTrigger value="general">通用</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="api">
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-6 pb-6">
+          {activeTab === "api" && (
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>火山引擎语音识别</CardTitle>
-                  <CardDescription>配置火山引擎 ASR 服务的认证信息</CardDescription>
-                </div>
+              <CardTitle>火山引擎语音识别</CardTitle>
+              <CardDescription>配置火山引擎 ASR 服务的认证信息</CardDescription>
+              <CardAction>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleTestConnection}
                   disabled={testing}
                 >
+                  <Plug className="size-4 mr-1.5" />
                   {testing ? "测试中..." : "测试连接"}
                 </Button>
-              </div>
+              </CardAction>
               {testResult && (
                 <p className="text-sm text-muted-foreground">{testResult}</p>
               )}
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="appId">App ID</Label>
+              <div className="flex items-center gap-4">
+                <Label htmlFor="appId" className="shrink-0 w-20">App ID</Label>
                 <Input
                   id="appId"
                   placeholder="输入 App ID"
                   value={settings.appId}
                   onChange={(e) => updateSetting("appId", e.target.value)}
+                  className="flex-1"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="accessKey">Access Key</Label>
+              <div className="flex items-center gap-4">
+                <Label htmlFor="accessKey" className="shrink-0 w-20">Access Key</Label>
                 <Input
                   id="accessKey"
                   type="password"
                   placeholder="输入 Access Key"
                   value={settings.accessKey}
                   onChange={(e) => updateSetting("accessKey", e.target.value)}
+                  className="flex-1"
                 />
               </div>
               <Separator />
-              <div className="space-y-2">
+              <div className="flex items-center justify-between">
                 <Label htmlFor="language">识别语言</Label>
                 <Select
                   value={settings.language}
                   onValueChange={(v) => updateSetting("language", v)}
                 >
-                  <SelectTrigger id="language">
+                  <SelectTrigger id="language" className="w-36">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -247,9 +239,9 @@ export const Settings = forwardRef<SettingsHandle, SettingsProps>(
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+          )}
 
-        <TabsContent value="hotkey">
+          {activeTab === "hotkey" && (
           <Card>
             <CardHeader>
               <CardTitle>快捷键配置</CardTitle>
@@ -273,21 +265,21 @@ export const Settings = forwardRef<SettingsHandle, SettingsProps>(
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+          )}
 
-        <TabsContent value="general">
+          {activeTab === "general" && (
           <Card>
             <CardHeader>
               <CardTitle>通用设置</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="outputMode">输出方式</Label>
+              <div className="flex items-center gap-4">
+                <Label htmlFor="outputMode" className="shrink-0 w-20">输出方式</Label>
                 <Select
                   value={settings.outputMode}
                   onValueChange={(v) => updateSetting("outputMode", v as AppSettings["outputMode"])}
                 >
-                  <SelectTrigger id="outputMode">
+                  <SelectTrigger id="outputMode" className="flex-1">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -296,13 +288,13 @@ export const Settings = forwardRef<SettingsHandle, SettingsProps>(
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="microphone">麦克风设备</Label>
+              <div className="flex items-center gap-4">
+                <Label htmlFor="microphone" className="shrink-0 w-20">麦克风</Label>
                 <Select
                   value={settings.microphoneDevice || "default"}
                   onValueChange={(v) => updateSetting("microphoneDevice", v === "default" ? "" : v)}
                 >
-                  <SelectTrigger id="microphone">
+                  <SelectTrigger id="microphone" className="flex-1">
                     <SelectValue placeholder="选择麦克风" />
                   </SelectTrigger>
                   <SelectContent>
@@ -314,8 +306,8 @@ export const Settings = forwardRef<SettingsHandle, SettingsProps>(
                     ))}
                   </SelectContent>
                 </Select>
-                <Button variant="ghost" size="sm" onClick={loadDevices}>
-                  刷新设备列表
+                <Button variant="ghost" size="icon" onClick={loadDevices} className="shrink-0 size-9">
+                  <RefreshCw className="size-4" />
                 </Button>
               </div>
               <Separator />
@@ -337,14 +329,15 @@ export const Settings = forwardRef<SettingsHandle, SettingsProps>(
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+          )}
 
-      <div className="mt-6 flex justify-end">
-        <Button onClick={handleSave}>
-          {saved ? "已保存" : "保存设置"}
-        </Button>
+        <div className="mt-6 flex justify-end">
+          <Button onClick={handleSave}>
+            {saved ? <Check className="size-4 mr-1.5" /> : <Save className="size-4 mr-1.5" />}
+            {saved ? "已保存" : "保存设置"}
+          </Button>
+        </div>
       </div>
     </div>
   );
-});
+}

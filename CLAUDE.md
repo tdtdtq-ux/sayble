@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Voide Keyboard（跨平台桌面语音输入工具）— 使用 Tauri v2 构建的桌面应用，通过麦克风采集语音，调用火山引擎 ASR 服务转文字，再通过剪贴板粘贴或键盘模拟将文字输入到任意应用中。支持全局热键、系统托盘常驻。
+Sayble（跨平台桌面语音输入工具）— 使用 Tauri v2 构建的桌面应用，通过麦克风采集语音，调用火山引擎 ASR 服务转文字，再通过剪贴板粘贴或键盘模拟将文字输入到任意应用中。支持全局热键、系统托盘常驻。
 
 ## Commands
 

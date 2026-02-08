@@ -3717,6 +3717,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "sayble"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "byteorder",
+ "cpal",
+ "dotenvy",
+ "enigo",
+ "env_logger",
+ "futures-util",
+ "log",
+ "mockall",
+ "serde",
+ "serde_json",
+ "symphonia",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-global-shortcut",
+ "tauri-plugin-opener",
+ "tauri-plugin-store",
+ "tempfile",
+ "tokio",
+ "tokio-tungstenite",
+ "url",
+ "uuid",
+ "windows 0.58.0",
+]
+
+[[package]]
 name = "schannel"
 version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5266,35 +5295,6 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
-
-[[package]]
-name = "voide-keyboard"
-version = "0.1.0"
-dependencies = [
- "arboard",
- "byteorder",
- "cpal",
- "dotenvy",
- "enigo",
- "env_logger",
- "futures-util",
- "log",
- "mockall",
- "serde",
- "serde_json",
- "symphonia",
- "tauri",
- "tauri-build",
- "tauri-plugin-global-shortcut",
- "tauri-plugin-opener",
- "tauri-plugin-store",
- "tempfile",
- "tokio",
- "tokio-tungstenite",
- "url",
- "uuid",
- "windows 0.58.0",
-]
 
 [[package]]
 name = "vswhom"

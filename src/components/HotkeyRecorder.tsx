@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import { Circle, X } from "lucide-react";
 
 interface HotkeyRecorderProps {
   value: string;
@@ -119,13 +120,11 @@ export function HotkeyRecorder({ value, onChange }: HotkeyRecorderProps) {
         onClick={recording ? undefined : handleStartRecording}
         disabled={recording}
       >
-        {recording ? "录入中..." : "录入"}
+        {recording ? "录入中..." : <><Circle className="size-3 mr-1" />录入</>}
       </Button>
-      {value && !recording && (
-        <Button variant="ghost" size="sm" onClick={handleClear}>
-          清除
-        </Button>
-      )}
+      <Button variant="ghost" size="sm" onClick={handleClear} disabled={!value || recording}>
+        <X className="size-3 mr-1" />清除
+      </Button>
     </div>
   );
 }

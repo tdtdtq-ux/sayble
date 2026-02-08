@@ -134,9 +134,9 @@ function App() {
   }, [startRecording, stopRecording, cancelRecording]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
+    <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
       <TitleBar />
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 min-h-0">
         <Settings
           ref={settingsRef}
           recording={recording}

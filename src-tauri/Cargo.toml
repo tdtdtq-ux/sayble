@@ -1,12 +1,12 @@
 [package]
-name = "voide-keyboard"
+name = "sayble"
 version = "0.1.0"
-description = "Voice Keyboard - 跨平台桌面语音输入工具"
+description = "Sayble - 跨平台桌面语音输入工具"
 authors = ["you"]
 edition = "2021"
 
 [lib]
-name = "voide_keyboard_lib"
+name = "sayble_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

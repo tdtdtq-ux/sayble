@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Voice Keyboard",
+  "productName": "Sayble",
   "version": "0.1.0",
-  "identifier": "com.voide-keyboard.app",
+  "identifier": "com.sayble.app",
   "build": {
     "beforeDevCommand": "npm run vite:dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Voice Keyboard",
+        "title": "Sayble",
         "width": 800,
         "height": 600,
         "visible": true,

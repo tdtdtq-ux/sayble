@@ -1,8 +1,8 @@
-use voide_keyboard_lib::config::*;
-use voide_keyboard_lib::asr::protocol::*;
-use voide_keyboard_lib::audio::AudioCapture;
-use voide_keyboard_lib::asr::VolcEngineAsr;
-use voide_keyboard_lib::asr::volcengine::{AsrEvent, run_asr_session};
+use sayble_lib::config::*;
+use sayble_lib::asr::protocol::*;
+use sayble_lib::audio::AudioCapture;
+use sayble_lib::asr::VolcEngineAsr;
+use sayble_lib::asr::volcengine::{AsrEvent, run_asr_session};
 
 /// 集成测试：完整配置 → ASR 验证 → 状态流转
 #[test]
@@ -58,7 +58,7 @@ fn test_audio_device_enumeration() {
         Ok(devices) => {
             // 设备列表可序列化
             let json = serde_json::to_string(&devices).unwrap();
-            let deserialized: Vec<voide_keyboard_lib::audio::AudioDevice> =
+            let deserialized: Vec<sayble_lib::audio::AudioDevice> =
                 serde_json::from_str(&json).unwrap();
             assert_eq!(deserialized.len(), devices.len());
         }

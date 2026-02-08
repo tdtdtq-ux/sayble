@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    voide_keyboard_lib::run()
+    sayble_lib::run()
 }

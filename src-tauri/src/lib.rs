@@ -134,7 +134,7 @@ pub fn run() {
                 log::info!("[hotkey-forward] thread exiting");
             });
 
-            log::info!("Voice Keyboard started");
+            log::info!("Sayble started");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
