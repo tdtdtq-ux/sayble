@@ -68,6 +68,11 @@ export function FloatingApp() {
   }, [hideWindow]);
 
   const resetState = useCallback(() => {
+    // 清理上一次的延迟隐藏 timer，防止它把新录音的窗口藏掉
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
     setPartialText("");
     setFinalText("");
     setDuration(0);

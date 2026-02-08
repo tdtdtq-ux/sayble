@@ -17,10 +17,10 @@ use tauri::{Emitter, Manager};
 use tauri_plugin_store::StoreExt;
 
 /// 录音状态标志，用于 start/stop 之间通信
-/// - bool: 是否正在录音
-/// - Option<Sender>: drop 掉 audio_tx 来触发 ASR 发送 last frame
+/// session_id 用于防止旧线程清理时覆盖新录音的状态
 struct RecordingFlag {
     is_recording: bool,
+    session_id: u64,
     /// drop 此 sender 会使桥接线程中的 audio_tx 也被 drop，从而触发 ASR 结束
     stop_tx: Option<std::sync::mpsc::Sender<()>>,
 }
@@ -113,6 +113,7 @@ pub fn run() {
             // 录音状态标志
             app.manage(Arc::new(Mutex::new(RecordingFlag {
                 is_recording: false,
+                session_id: 0,
                 stop_tx: None,
             })));
 
@@ -203,11 +204,15 @@ async fn cmd_start_recording(
     access_key: String,
     device_name: String,
 ) -> Result<(), String> {
-    // 检查是否已在录音
+    // 如果上一次录音还没结束，先强制停掉旧会话
     {
-        let f = flag.lock().map_err(|e| e.to_string())?;
+        let mut f = flag.lock().map_err(|e| e.to_string())?;
         if f.is_recording {
-            return Err("已在录音中".to_string());
+            log::warn!("[recording] force stopping previous session {}", f.session_id);
+            if let Some(tx) = f.stop_tx.take() {
+                let _ = tx.send(());
+            }
+            f.is_recording = false;
         }
     }
 
@@ -218,6 +223,12 @@ async fn cmd_start_recording(
     };
 
     VolcEngineAsr::validate_config(&asr_config)?;
+
+    // 分配新 session_id
+    let session_id = {
+        let f = flag.lock().map_err(|e| e.to_string())?;
+        f.session_id.wrapping_add(1)
+    };
 
     // 1. 构建 channel，直接调用 run_asr_session（在 Tauri 的 tokio runtime 中）
     let (event_tx, event_rx) = std::sync::mpsc::channel::<AsrEvent>();
@@ -241,6 +252,7 @@ async fn cmd_start_recording(
     // 4. 在独立线程中启动音频采集并桥接到 ASR
     let flag_clone = Arc::clone(&flag);
     let is_running_clone2 = is_running.clone();
+    let my_session_id = session_id;
     std::thread::spawn(move || {
         let mut audio_capture = AudioCapture::new();
         let capture_rx = match audio_capture.start(&device_name) {
@@ -249,8 +261,11 @@ async fn cmd_start_recording(
                 log::error!("Failed to start audio capture: {}", e);
                 let _ = event_tx.send(AsrEvent::Error(format!("麦克风启动失败: {}", e)));
                 if let Ok(mut f) = flag_clone.lock() {
-                    f.is_recording = false;
-                    f.stop_tx = None;
+                    // 只有 session_id 匹配时才清理，防止覆盖新录音的状态
+                    if f.session_id == my_session_id {
+                        f.is_recording = false;
+                        f.stop_tx = None;
+                    }
                 }
                 return;
             }
@@ -281,8 +296,11 @@ async fn cmd_start_recording(
         }
 
         if let Ok(mut f) = flag_clone.lock() {
-            f.is_recording = false;
-            f.stop_tx = None;
+            // 只有 session_id 匹配时才清理，防止覆盖新录音的状态
+            if f.session_id == my_session_id {
+                f.is_recording = false;
+                f.stop_tx = None;
+            }
         }
     });
 
@@ -291,8 +309,12 @@ async fn cmd_start_recording(
         loop {
             match event_rx.try_recv() {
                 Ok(event) => {
+                    let is_terminal = matches!(
+                        event,
+                        AsrEvent::FinalResult(_) | AsrEvent::Disconnected | AsrEvent::Error(_)
+                    );
                     let _ = app.emit("asr-event", &event);
-                    if matches!(event, AsrEvent::FinalResult(_) | AsrEvent::Disconnected) {
+                    if is_terminal {
                         break;
                     }
                 }
@@ -308,6 +330,7 @@ async fn cmd_start_recording(
     {
         let mut f = flag.lock().map_err(|e| e.to_string())?;
         f.is_recording = true;
+        f.session_id = session_id;
         f.stop_tx = Some(stop_tx);
     }
 
