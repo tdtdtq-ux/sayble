@@ -16,6 +16,7 @@ export function FloatingApp() {
   const outputModeRef = useRef<"Clipboard" | "SimulateKeyboard">("Clipboard");
   const autoOutputRef = useRef(true);
   const maxSessionRef = useRef(0);
+  const cancelledSessionRef = useRef(0);
   const outputDoneRef = useRef(false);
 
   const clearTimer = useCallback(() => {
@@ -81,8 +82,9 @@ export function FloatingApp() {
       if (cancelled) return;
       const { sessionId, event } = ev.payload;
 
-      // 旧 session 的事件直接丢弃
+      // 旧 session 或已取消 session 的事件直接丢弃
       if (sessionId < maxSessionRef.current) return;
+      if (sessionId === cancelledSessionRef.current) return;
 
       // 新 session 到来，自动 reset
       if (sessionId > maxSessionRef.current) {
@@ -161,9 +163,6 @@ export function FloatingApp() {
         if (autoOutput !== undefined) {
           autoOutputRef.current = autoOutput;
         }
-        // 递增 maxSessionRef，使旧 session 的迟到事件被丢弃
-        // （新 session 的 Connected 到来时会用真实 sessionId 再次更新）
-        maxSessionRef.current += 1;
         resetState();
         setFloatingStatus("recording");
         startTimer();
@@ -172,8 +171,8 @@ export function FloatingApp() {
         setFloatingStatus("recognizing");
         clearTimer();
       } else if (action === "cancel") {
-        // cancel 时让 maxSessionRef +1，使当前 session 的后续事件全部被丢弃
-        maxSessionRef.current += 1;
+        // 标记当前 session 为已取消，其后续事件会被丢弃
+        cancelledSessionRef.current = maxSessionRef.current;
         setFloatingStatus("idle");
         clearTimer();
         hideWindow();
@@ -199,7 +198,7 @@ export function FloatingApp() {
       finalText={finalText}
       duration={duration}
       onCancel={() => {
-        maxSessionRef.current += 1;
+        cancelledSessionRef.current = maxSessionRef.current;
         setFloatingStatus("idle");
         clearTimer();
         hideWindow();

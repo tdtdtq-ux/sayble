@@ -88,6 +88,9 @@ function App() {
   }, []);
 
   const cancelRecording = useCallback(async () => {
+    // 先注销 ASR 监听器，防止旧 session 的后续事件干扰状态
+    unlistenRef.current?.();
+    unlistenRef.current = null;
     try {
       await invoke("cmd_stop_recording");
     } catch {

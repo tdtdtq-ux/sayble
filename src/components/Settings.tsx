@@ -182,8 +182,23 @@ export const Settings = forwardRef<SettingsHandle, SettingsProps>(
         <TabsContent value="api">
           <Card>
             <CardHeader>
-              <CardTitle>火山引擎语音识别</CardTitle>
-              <CardDescription>配置火山引擎 ASR 服务的认证信息</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>火山引擎语音识别</CardTitle>
+                  <CardDescription>配置火山引擎 ASR 服务的认证信息</CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTestConnection}
+                  disabled={testing}
+                >
+                  {testing ? "测试中..." : "测试连接"}
+                </Button>
+              </div>
+              {testResult && (
+                <p className="text-sm text-muted-foreground">{testResult}</p>
+              )}
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -204,19 +219,6 @@ export const Settings = forwardRef<SettingsHandle, SettingsProps>(
                   value={settings.accessKey}
                   onChange={(e) => updateSetting("accessKey", e.target.value)}
                 />
-              </div>
-              <Separator />
-              <div className="flex items-center gap-4">
-                <Button
-                  variant="outline"
-                  onClick={handleTestConnection}
-                  disabled={testing}
-                >
-                  {testing ? "测试中..." : "测试连接"}
-                </Button>
-                {testResult && (
-                  <span className="text-sm text-muted-foreground">{testResult}</span>
-                )}
               </div>
               <Separator />
               <div className="space-y-2">
