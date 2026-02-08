@@ -96,6 +96,28 @@ function App() {
     await emit("floating-control", { action: "cancel" });
   }, []);
 
+  // 监听托盘"关于"事件
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: UnlistenFn | null = null;
+
+    listen("show-about", () => {
+      if (cancelled) return;
+      settingsRef.current?.showAbout();
+    }).then((fn) => {
+      if (cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+
   // 监听后端快捷键事件
   // 后端已根据 RecordingFlag 判断好了 start/stop，前端直接执行
   useEffect(() => {

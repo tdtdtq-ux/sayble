@@ -16,7 +16,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { HotkeyRecorder } from "./HotkeyRecorder";
 import { AppIcon } from "./AppIcon";
-import { Key, Keyboard, Settings2, Plug, RefreshCw, Save, Check } from "lucide-react";
+import { About } from "./About";
+import { Key, Keyboard, Settings2, Info, Plug, RefreshCw, Save, Check } from "lucide-react";
 
 interface AudioDevice {
   name: string;
@@ -57,6 +58,7 @@ export interface SettingsHandle {
     outputMode: "Clipboard" | "SimulateKeyboard";
     autoOutput: boolean;
   };
+  showAbout: () => void;
 }
 
 interface SettingsProps {
@@ -79,6 +81,7 @@ export function Settings({ ref }: SettingsProps) {
       outputMode: settings.outputMode,
       autoOutput: settings.autoOutput,
     }),
+    showAbout: () => setActiveTab("about"),
   }), [settings.appId, settings.accessKey, settings.microphoneDevice, settings.outputMode, settings.autoOutput]);
 
   useEffect(() => {
@@ -154,10 +157,11 @@ export function Settings({ ref }: SettingsProps) {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-0">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="api"><Key className="size-4 mr-1.5" />API 配置</TabsTrigger>
             <TabsTrigger value="hotkey"><Keyboard className="size-4 mr-1.5" />快捷键</TabsTrigger>
             <TabsTrigger value="general"><Settings2 className="size-4 mr-1.5" />通用</TabsTrigger>
+            <TabsTrigger value="about"><Info className="size-4 mr-1.5" />关于</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -324,12 +328,16 @@ export function Settings({ ref }: SettingsProps) {
           </Card>
           )}
 
+          {activeTab === "about" && <About />}
+
+        {activeTab !== "about" && (
         <div className="mt-6 flex justify-end">
           <Button onClick={handleSave}>
             {saved ? <Check className="size-4 mr-1.5" /> : <Save className="size-4 mr-1.5" />}
             {saved ? "已保存" : "保存设置"}
           </Button>
         </div>
+        )}
       </div>
     </div>
   );
