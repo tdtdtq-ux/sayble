@@ -203,6 +203,7 @@ pub fn run() {
             cmd_test_asr_connection,
             cmd_start_recording,
             cmd_stop_recording,
+            cmd_load_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -431,11 +432,34 @@ async fn cmd_start_recording(
                                 "event": serde_json::to_value(&event).unwrap_or_default()
                             }));
                         }
-                        AsrEvent::FinalResult(_) => {
+                        AsrEvent::FinalResult(text, duration_ms) => {
                             had_final = true;
+                            // 累加统计到 stats.json
+                            log::info!("[asr-forward] FinalResult received, text_len={}, duration_ms={:?}", text.len(), duration_ms);
+                            match app.store("stats.json") {
+                                Ok(store) => {
+                                    let prev_dur: i64 = store.get("total_duration_ms")
+                                        .and_then(|v| v.as_i64()).unwrap_or(0);
+                                    let prev_chars: i64 = store.get("total_chars")
+                                        .and_then(|v| v.as_i64()).unwrap_or(0);
+                                    let count: i64 = store.get("total_count")
+                                        .and_then(|v| v.as_i64()).unwrap_or(0);
+                                    store.set("total_duration_ms", serde_json::json!(prev_dur + duration_ms.unwrap_or(0)));
+                                    store.set("total_chars", serde_json::json!(prev_chars + text.chars().count() as i64));
+                                    store.set("total_count", serde_json::json!(count + 1));
+                                    log::info!("[asr-forward] stats updated: dur={}, chars={}, count={}", prev_dur + duration_ms.unwrap_or(0), prev_chars + text.chars().count() as i64, count + 1);
+                                    if let Err(e) = store.save() {
+                                        log::error!("[asr-forward] stats save failed: {}", e);
+                                    }
+                                }
+                                Err(e) => {
+                                    log::error!("[asr-forward] failed to open stats store: {}", e);
+                                }
+                            }
+                            // emit 给前端（保持原格式）
                             let _ = app.emit("asr-event", serde_json::json!({
                                 "sessionId": session_id,
-                                "event": serde_json::to_value(&event).unwrap_or_default()
+                                "event": {"FinalResult": text}
                             }));
                             // FinalResult 后等 1 秒再发 Finished，让前端展示"完成"状态
                             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -464,10 +488,19 @@ async fn cmd_start_recording(
                             if !had_final {
                                 // 没有 FinalResult，用最后的 PartialResult 作为 fallback
                                 if !last_partial_text.is_empty() {
-                                    let fallback = AsrEvent::FinalResult(last_partial_text.clone());
+                                    // 累加统计（fallback 场景，时长为 0）
+                                    if let Ok(store) = app.store("stats.json") {
+                                        let prev_chars: i64 = store.get("total_chars")
+                                            .and_then(|v| v.as_i64()).unwrap_or(0);
+                                        let count: i64 = store.get("total_count")
+                                            .and_then(|v| v.as_i64()).unwrap_or(0);
+                                        store.set("total_chars", serde_json::json!(prev_chars + last_partial_text.chars().count() as i64));
+                                        store.set("total_count", serde_json::json!(count + 1));
+                                        let _ = store.save();
+                                    }
                                     let _ = app.emit("asr-event", serde_json::json!({
                                         "sessionId": session_id,
-                                        "event": serde_json::to_value(&fallback).unwrap_or_default()
+                                        "event": {"FinalResult": last_partial_text}
                                     }));
                                 }
                             }
@@ -527,4 +560,15 @@ fn cmd_stop_recording(
     f.is_recording = false;
     log::debug!("[recording] session {} stopped, is_recording=false", f.session_id);
     Ok(())
+}
+
+#[tauri::command]
+fn cmd_load_stats(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let store = app.store("stats.json")
+        .map_err(|e| format!("Failed to open stats store: {}", e))?;
+    Ok(serde_json::json!({
+        "totalDurationMs": store.get("total_duration_ms").and_then(|v| v.as_i64()).unwrap_or(0),
+        "totalChars": store.get("total_chars").and_then(|v| v.as_i64()).unwrap_or(0),
+        "totalCount": store.get("total_count").and_then(|v| v.as_i64()).unwrap_or(0),
+    }))
 }

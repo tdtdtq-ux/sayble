@@ -101,8 +101,9 @@ Vitest + jsdom 环境 + @testing-library/react。测试文件放在对应目录�
 
 | 路径 | 说明 |
 |------|------|
-| `%LOCALAPPDATA%/com.sayble.app/logs/sayble.log` | 应用日志（tauri-plugin-log，5MB 轮转，保留旧文件） |
 | `%APPDATA%/com.sayble.app/settings.json` | 用户设置持久化（tauri-plugin-store） |
+| `%APPDATA%/com.sayble.app/stats.json` | 使用统计持久化（tauri-plugin-store） |
+| `%LOCALAPPDATA%/com.sayble.app/logs/sayble.log` | 应用日志（tauri-plugin-log，5MB 轮转，保留旧文件） |
 
 ### 日志 Tag 约定
 

@@ -18,8 +18,8 @@ const ASR_WSS_URL: &str = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_a
 pub enum AsrEvent {
     /// 中间识别结果（边说边出字）
     PartialResult(String),
-    /// 最终识别结果
-    FinalResult(String),
+    /// 最终识别结果 (文本, 音频时长毫秒)
+    FinalResult(String, Option<i64>),
     /// 错误
     Error(String),
     /// 连接已建立
@@ -257,8 +257,10 @@ pub async fn run_asr_session(
                                 if let Some(text) = &result.text {
                                     if !text.is_empty() {
                                         if header.is_last_package() {
+                                            let duration_ms = response.audio_info.as_ref()
+                                                .and_then(|info| info.duration);
                                             let _ = event_tx_recv
-                                                .send(AsrEvent::FinalResult(text.clone()));
+                                                .send(AsrEvent::FinalResult(text.clone(), duration_ms));
                                         } else {
                                             let _ = event_tx_recv
                                                 .send(AsrEvent::PartialResult(text.clone()));
@@ -408,7 +410,7 @@ mod tests {
 
     #[test]
     fn test_asr_event_serialization() {
-        let event = AsrEvent::FinalResult("你好".to_string());
+        let event = AsrEvent::FinalResult("你好".to_string(), None);
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains("你好"));
 

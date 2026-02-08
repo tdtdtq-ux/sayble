@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useImperativeHandle, type Ref } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +18,21 @@ import { Separator } from "@/components/ui/separator";
 import { HotkeyRecorder } from "./HotkeyRecorder";
 import { AppIcon } from "./AppIcon";
 import { About } from "./About";
-import { Key, Keyboard, Settings2, Info, Plug, RefreshCw, Save, Check } from "lucide-react";
+import { Key, Keyboard, Settings2, Info, Plug, RefreshCw, Save, Check, Home, Mic, Type, Clock, Hash } from "lucide-react";
+
+function formatStatsDuration(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${seconds}s`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+  return `${seconds}s`;
+}
 
 interface AudioDevice {
   name: string;
@@ -71,7 +86,40 @@ export function Settings({ ref }: SettingsProps) {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState("api");
+  const [activeTab, setActiveTab] = useState("home");
+
+  // 切到首页时刷新统计数据
+  useEffect(() => {
+    if (activeTab === "home") {
+      loadStats();
+    }
+  }, [activeTab]);
+
+  // 监听 ASR 完成事件，自动刷新统计
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: (() => void) | null = null;
+
+    listen<{ event: string | object }>("asr-event", (ev) => {
+      if (cancelled) return;
+      const { event } = ev.payload;
+      if (event === "Finished") {
+        loadStats();
+      }
+    }).then((fn) => {
+      if (cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+  const [stats, setStats] = useState<{ totalDurationMs: number; totalChars: number; totalCount: number } | null>(null);
 
   useImperativeHandle(ref, () => ({
     getRecordingParams: () => ({
@@ -87,6 +135,7 @@ export function Settings({ ref }: SettingsProps) {
   useEffect(() => {
     loadDevices();
     loadSettings();
+    loadStats();
   }, []);
 
   const loadSettings = async () => {
@@ -106,6 +155,15 @@ export function Settings({ ref }: SettingsProps) {
       setDevices(result);
     } catch (e) {
       console.error("Failed to load devices:", e);
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      const result = await invoke<{ totalDurationMs: number; totalChars: number; totalCount: number }>("cmd_load_stats");
+      setStats(result);
+    } catch (e) {
+      console.error("Failed to load stats:", e);
     }
   };
 
@@ -157,7 +215,8 @@ export function Settings({ ref }: SettingsProps) {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-0">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="home"><Home className="size-4 mr-1.5" />首页</TabsTrigger>
             <TabsTrigger value="api"><Key className="size-4 mr-1.5" />API 配置</TabsTrigger>
             <TabsTrigger value="hotkey"><Keyboard className="size-4 mr-1.5" />快捷键</TabsTrigger>
             <TabsTrigger value="general"><Settings2 className="size-4 mr-1.5" />通用</TabsTrigger>
@@ -167,6 +226,34 @@ export function Settings({ ref }: SettingsProps) {
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-6 pb-6">
+          {activeTab === "home" && (
+          <Card>
+            <CardHeader>
+              <CardTitle>使用统计</CardTitle>
+              <CardDescription>语音识别累计使用数据</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="flex flex-col items-center gap-2 rounded-lg border p-4">
+                  <Hash className="size-5 text-muted-foreground" />
+                  <span className="text-2xl font-bold">{stats?.totalCount ?? 0}</span>
+                  <span className="text-sm text-muted-foreground">识别次数</span>
+                </div>
+                <div className="flex flex-col items-center gap-2 rounded-lg border p-4">
+                  <Type className="size-5 text-muted-foreground" />
+                  <span className="text-2xl font-bold">{stats?.totalChars ?? 0}</span>
+                  <span className="text-sm text-muted-foreground">识别字数</span>
+                </div>
+                <div className="flex flex-col items-center gap-2 rounded-lg border p-4">
+                  <Clock className="size-5 text-muted-foreground" />
+                  <span className="text-2xl font-bold">{formatStatsDuration(stats?.totalDurationMs ?? 0)}</span>
+                  <span className="text-sm text-muted-foreground">录音时长</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          )}
+
           {activeTab === "api" && (
           <Card>
             <CardHeader>
@@ -330,7 +417,7 @@ export function Settings({ ref }: SettingsProps) {
 
           {activeTab === "about" && <About />}
 
-        {activeTab !== "about" && (
+        {activeTab !== "about" && activeTab !== "home" && (
         <div className="mt-6 flex justify-end">
           <Button onClick={handleSave}>
             {saved ? <Check className="size-4 mr-1.5" /> : <Save className="size-4 mr-1.5" />}
