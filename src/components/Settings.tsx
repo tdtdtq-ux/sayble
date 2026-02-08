@@ -60,17 +60,10 @@ export interface SettingsHandle {
 }
 
 interface SettingsProps {
-  recording: boolean;
   ref?: Ref<SettingsHandle>;
-  onStartRecording: (settings: {
-    appId: string;
-    accessKey: string;
-    microphoneDevice: string;
-  }) => void;
-  onStopRecording: () => void;
 }
 
-export function Settings({ recording, onStartRecording, onStopRecording, ref }: SettingsProps) {
+export function Settings({ ref }: SettingsProps) {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [testing, setTesting] = useState(false);

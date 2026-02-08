@@ -1,11 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emit, type UnlistenFn } from "@tauri-apps/api/event";
 import { Settings, type SettingsHandle } from "@/components/Settings";
 import { TitleBar } from "@/components/TitleBar";
 
 function App() {
-  const [recording, setRecording] = useState(false);
   const unlistenRef = useRef<UnlistenFn | null>(null);
   const settingsRef = useRef<SettingsHandle>(null);
   const recordingStartTimeRef = useRef(0);
@@ -53,7 +52,8 @@ function App() {
             else if ("Error" in event) type = "Error";
           }
           if (type === "FinalResult" || type === "Error" || type === "Finished") {
-            setRecording(false);
+            unlistenRef.current?.();
+            unlistenRef.current = null;
           }
         });
         unlistenRef.current = unlisten;
@@ -63,7 +63,6 @@ function App() {
           accessKey: settings.accessKey,
           deviceName: settings.microphoneDevice,
         });
-        setRecording(true);
         recordingStartTimeRef.current = Date.now();
       } catch {
         // 启动失败
@@ -83,7 +82,6 @@ function App() {
     } catch {
       // cmd_stop_recording 可能因为后端已经结束而失败，忽略
     }
-    setRecording(false);
     await emit("floating-control", { action: "stop" });
   }, []);
 
@@ -96,7 +94,6 @@ function App() {
     } catch {
       // ignore
     }
-    setRecording(false);
     await emit("floating-control", { action: "cancel" });
   }, []);
 
@@ -139,9 +136,6 @@ function App() {
       <div className="flex-1 min-h-0">
         <Settings
           ref={settingsRef}
-          recording={recording}
-          onStartRecording={startRecording}
-          onStopRecording={stopRecording}
         />
       </div>
     </div>
