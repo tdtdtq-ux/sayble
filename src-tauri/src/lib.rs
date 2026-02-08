@@ -174,6 +174,14 @@ pub fn run() {
             log::info!("Sayble started");
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    let _ = window.hide();
+                    api.prevent_close();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             cmd_list_audio_devices,
             cmd_output_text,

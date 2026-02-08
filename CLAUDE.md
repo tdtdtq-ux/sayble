@@ -39,7 +39,6 @@ React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 
 - **main.tsx** → 入口，根据 URL 参数渲染 `<App />` 或 `<FloatingApp />`
 - **App.tsx** → 主窗口根组件，监听后端热键指令，调用录音 command，通过 `emit("floating-control")` 与浮窗通信
-- **TitleBar.tsx** — 自定义标题栏（主窗口无系统装饰，使用自定义拖拽标题栏）
 - **Settings.tsx** — 主设置界面（API 配置、热键配置、输出模式、麦克风选择等）
 - **FloatingApp.tsx** — 浮窗入口，独立窗口，监听 ASR 事件（带 sessionId 过滤）和 floating-control 事件，管理文字输出
 - **FloatingWindow.tsx** — 浮窗 UI 组件（录音状态指示、实时识别文字、计时器）
@@ -96,7 +95,7 @@ Vitest + jsdom 环境 + @testing-library/react。测试文件放在对应目录�
 
 ## Platform Notes
 
-当前主要面向 Windows 平台（hotkey 模块使用 Windows API 键盘钩子）。主窗口无系统装饰（`decorations: false`），使用自定义标题栏。浮窗为独立透明窗口（`transparent: true, alwaysOnTop: true`），不显示在任务栏。
+当前主要面向 Windows 平台（hotkey 模块使用 Windows API 键盘钩子）。主窗口使用 Overlay 标题栏模式（`titleBarStyle: "Overlay"`），由系统提供窗口控制按钮，关闭按钮拦截为隐藏到托盘。浮窗为独立窗口（`decorations: false, alwaysOnTop: true`），不显示在任务栏。通过 `build.manifest` 声明 `PerMonitorV2` DPI 感知，确保多屏不同缩放比例下 UI 清晰。
 
 ## Work Rules
 

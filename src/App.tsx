@@ -2,7 +2,6 @@ import { useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emit, type UnlistenFn } from "@tauri-apps/api/event";
 import { Settings, type SettingsHandle } from "@/components/Settings";
-import { TitleBar } from "@/components/TitleBar";
 
 function App() {
   const unlistenRef = useRef<UnlistenFn | null>(null);
@@ -132,7 +131,6 @@ function App() {
 
   return (
     <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
-      <TitleBar />
       <div className="flex-1 min-h-0">
         <Settings
           ref={settingsRef}

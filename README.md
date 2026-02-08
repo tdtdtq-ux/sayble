@@ -100,7 +100,6 @@ src/                        # 前端（React）
 │   ├── Settings.tsx        # 设置页面（API / 快捷键 / 通用）
 │   ├── FloatingApp.tsx     # 浮窗入口
 │   ├── FloatingWindow.tsx  # 浮窗 UI（录音状态 / 实时文字 / 计时）
-│   ├── TitleBar.tsx        # 自定义标题栏
 │   └── ui/                 # shadcn/ui 组件库
 
 src-tauri/src/              # 后端（Rust）
