@@ -46,6 +46,36 @@ fn parse_hotkey_configs(toggle_label: &str, hold_label: &str) -> Vec<HotkeyConfi
     configs
 }
 
+/// 从持久化 store 中读取录音相关设置
+fn load_recording_settings_from_store(app: &tauri::AppHandle) -> Result<(AsrConfig, String, OutputMode, bool), String> {
+    let store = app.store("settings.json")
+        .map_err(|e| format!("Failed to open store: {}", e))?;
+    let settings = store.get("app_settings")
+        .ok_or("No app_settings found in store")?;
+
+    let app_id = settings.get("appId").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let access_key = settings.get("accessKey").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let device_name = settings.get("microphoneDevice").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let output_mode_str = settings.get("outputMode").and_then(|v| v.as_str()).unwrap_or("Clipboard");
+    let output_mode = match output_mode_str {
+        "SimulateKeyboard" => OutputMode::SimulateKeyboard,
+        _ => OutputMode::Clipboard,
+    };
+    let auto_output = settings.get("autoOutput").and_then(|v| v.as_bool()).unwrap_or(true);
+
+    if app_id.is_empty() || access_key.is_empty() {
+        return Err("API 配置不完整，请先在设置中填写 App ID 和 Access Key".to_string());
+    }
+
+    let asr_config = AsrConfig {
+        app_id,
+        access_key,
+        ..Default::default()
+    };
+
+    Ok((asr_config, device_name, output_mode, auto_output))
+}
+
 /// 从持久化 store 中读取快捷键标签，解析为 HotkeyConfig 列表
 fn load_hotkey_configs_from_store(app: &tauri::AppHandle) -> Option<Vec<HotkeyConfig>> {
     let store = app.store("settings.json").ok()?;
@@ -143,13 +173,16 @@ pub fn run() {
             }));
             app.manage(recording_flag.clone());
 
-            // 后台线程：轮询 HotkeyManager 事件并 emit 到前端
-            // ToggleRecording 在此处读 RecordingFlag 转换为 StartRecording/StopRecording
+            // 后台线程：轮询 HotkeyManager 事件，直接控制录音启停
+            // 不再 emit hotkey-event 给前端，彻底绕过 WebView
             let hotkey_handle = handle.clone();
             let hotkey_flag = recording_flag.clone();
             log::info!("[hotkey] manager running: {}", manager.lock().map(|m| m.is_running()).unwrap_or(false));
             std::thread::spawn(move || {
-                log::info!("[hotkey-forward] thread started");
+                log::info!("[hotkey-forward] thread started (backend-driven mode)");
+                let mut recording_start_time: Option<std::time::Instant> = None;
+                const MIN_RECORDING_MS: u128 = 800;
+
                 loop {
                     let event = {
                         let mgr = manager.lock().unwrap_or_else(|e| e.into_inner());
@@ -175,8 +208,80 @@ pub fn run() {
                             }
                             other => other,
                         };
-                        log::debug!("[hotkey-forward] emitting to frontend: {:?}", event);
-                        let _ = hotkey_handle.emit("hotkey-event", &event);
+
+                        match event {
+                            HotkeyEvent::StartRecording => {
+                                log::info!("[hotkey-forward] StartRecording: reading settings from store");
+                                match load_recording_settings_from_store(&hotkey_handle) {
+                                    Ok((asr_config, device_name, output_mode, auto_output)) => {
+                                        // 先通知浮窗开始（让浮窗立即显示）
+                                        let output_mode_str = match output_mode {
+                                            OutputMode::Clipboard => "Clipboard",
+                                            OutputMode::SimulateKeyboard => "SimulateKeyboard",
+                                        };
+                                        let _ = hotkey_handle.emit("floating-control", serde_json::json!({
+                                            "action": "start",
+                                            "outputMode": output_mode_str,
+                                            "autoOutput": auto_output,
+                                        }));
+
+                                        // 直接调用录音启动
+                                        match start_recording_inner(&hotkey_handle, &hotkey_flag, asr_config, device_name) {
+                                            Ok(session_id) => {
+                                                recording_start_time = Some(std::time::Instant::now());
+                                                log::info!("[hotkey-forward] recording started, session_id={}", session_id);
+                                            }
+                                            Err(e) => {
+                                                log::error!("[hotkey-forward] start_recording failed: {}", e);
+                                                let _ = hotkey_handle.emit("floating-control", serde_json::json!({
+                                                    "action": "cancel",
+                                                }));
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log::warn!("[hotkey-forward] cannot start recording: {}", e);
+                                    }
+                                }
+                            }
+
+                            HotkeyEvent::StopRecording => {
+                                // 最短录音保护
+                                if let Some(start) = recording_start_time.take() {
+                                    let elapsed = start.elapsed().as_millis();
+                                    if elapsed < MIN_RECORDING_MS {
+                                        let remaining = MIN_RECORDING_MS - elapsed;
+                                        log::debug!("[hotkey-forward] min recording guard: sleeping {}ms", remaining);
+                                        std::thread::sleep(std::time::Duration::from_millis(remaining as u64));
+                                    }
+                                }
+
+                                match stop_recording_inner(&hotkey_flag) {
+                                    Ok(()) => {
+                                        let _ = hotkey_handle.emit("floating-control", serde_json::json!({
+                                            "action": "stop",
+                                        }));
+                                        log::info!("[hotkey-forward] recording stopped");
+                                    }
+                                    Err(e) => {
+                                        log::warn!("[hotkey-forward] stop_recording failed: {}", e);
+                                    }
+                                }
+                            }
+
+                            HotkeyEvent::CancelRecording => {
+                                recording_start_time = None;
+                                let _ = stop_recording_inner(&hotkey_flag);
+                                let _ = hotkey_handle.emit("floating-control", serde_json::json!({
+                                    "action": "cancel",
+                                }));
+                                log::info!("[hotkey-forward] recording cancelled");
+                            }
+
+                            HotkeyEvent::ToggleRecording => {
+                                unreachable!("ToggleRecording should have been converted above");
+                            }
+                        }
                     } else {
                         std::thread::sleep(std::time::Duration::from_millis(50));
                     }
@@ -293,16 +398,14 @@ fn cmd_load_settings(app: tauri::AppHandle) -> Result<Option<serde_json::Value>,
     Ok(store.get("app_settings"))
 }
 
-#[tauri::command]
-async fn cmd_start_recording(
-    app: tauri::AppHandle,
-    flag: tauri::State<'_, Arc<Mutex<RecordingFlag>>>,
-    app_id: String,
-    access_key: String,
+/// 内部录音启动逻辑，可从任意线程调用（非 async）
+fn start_recording_inner(
+    app: &tauri::AppHandle,
+    flag: &Arc<Mutex<RecordingFlag>>,
+    asr_config: AsrConfig,
     device_name: String,
-) -> Result<(), String> {
-    log::info!("[cmd] start_recording called, device={}", device_name);
-    log::debug!("[recording] cmd_start_recording called, device={}", device_name);
+) -> Result<u64, String> {
+    log::info!("[recording] start_recording_inner called, device={}", device_name);
     // 如果上一次录音还没结束，先强制停掉旧会话
     {
         let mut f = flag.lock().map_err(|e| e.to_string())?;
@@ -315,12 +418,6 @@ async fn cmd_start_recording(
             f.is_recording = false;
         }
     }
-
-    let asr_config = AsrConfig {
-        app_id,
-        access_key,
-        ..Default::default()
-    };
 
     VolcEngineAsr::validate_config(&asr_config)?;
 
@@ -338,10 +435,10 @@ async fn cmd_start_recording(
     let (audio_tx, audio_rx) = tokio::sync::mpsc::channel::<Vec<i16>>(100);
     let is_running = Arc::new(Mutex::new(true));
 
-    // 2. 直接在 Tauri 的 tokio runtime 里 spawn ASR 会话
+    // 2. 在 Tauri 的 tokio runtime 里 spawn ASR 会话
     let event_tx_clone = event_tx.clone();
     let is_running_clone = is_running.clone();
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         if let Err(e) =
             asr::volcengine::run_asr_session(asr_config, event_tx_clone.clone(), audio_rx, is_running_clone).await
         {
@@ -353,7 +450,7 @@ async fn cmd_start_recording(
     let (stop_tx, stop_rx) = std::sync::mpsc::channel::<()>();
 
     // 4. 在独立线程中启动音频采集并桥接到 ASR
-    let flag_clone = Arc::clone(&flag);
+    let flag_clone = Arc::clone(flag);
     let is_running_clone2 = is_running.clone();
     let my_session_id = session_id;
     std::thread::spawn(move || {
@@ -409,7 +506,8 @@ async fn cmd_start_recording(
 
     // 5. 后台 tokio task：轮询 ASR 事件并 emit 到前端
     //    每个事件包装为 { sessionId, event }，Disconnected 内部消化，新增 Finished
-    tokio::spawn(async move {
+    let app_clone = app.clone();
+    tauri::async_runtime::spawn(async move {
         log::debug!("[asr-forward] session {} forward task started", session_id);
         let mut last_partial_text = String::new();
         let mut had_final = false;
@@ -420,14 +518,14 @@ async fn cmd_start_recording(
                     log::debug!("[asr-forward] session {} received: {:?}", session_id, event);
                     match &event {
                         AsrEvent::Connected => {
-                            let _ = app.emit("asr-event", serde_json::json!({
+                            let _ = app_clone.emit("asr-event", serde_json::json!({
                                 "sessionId": session_id,
                                 "event": serde_json::to_value(&event).unwrap_or_default()
                             }));
                         }
                         AsrEvent::PartialResult(text) => {
                             last_partial_text = text.clone();
-                            let _ = app.emit("asr-event", serde_json::json!({
+                            let _ = app_clone.emit("asr-event", serde_json::json!({
                                 "sessionId": session_id,
                                 "event": serde_json::to_value(&event).unwrap_or_default()
                             }));
@@ -436,7 +534,7 @@ async fn cmd_start_recording(
                             had_final = true;
                             // 累加统计到 stats.json
                             log::info!("[asr-forward] FinalResult received, text_len={}, duration_ms={:?}", text.len(), duration_ms);
-                            match app.store("stats.json") {
+                            match app_clone.store("stats.json") {
                                 Ok(store) => {
                                     let prev_dur: i64 = store.get("total_duration_ms")
                                         .and_then(|v| v.as_i64()).unwrap_or(0);
@@ -457,13 +555,13 @@ async fn cmd_start_recording(
                                 }
                             }
                             // emit 给前端（保持原格式）
-                            let _ = app.emit("asr-event", serde_json::json!({
+                            let _ = app_clone.emit("asr-event", serde_json::json!({
                                 "sessionId": session_id,
                                 "event": {"FinalResult": text}
                             }));
                             // FinalResult 后等 1 秒再发 Finished，让前端展示"完成"状态
                             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                            let _ = app.emit("asr-event", serde_json::json!({
+                            let _ = app_clone.emit("asr-event", serde_json::json!({
                                 "sessionId": session_id,
                                 "event": "Finished"
                             }));
@@ -471,12 +569,12 @@ async fn cmd_start_recording(
                             break;
                         }
                         AsrEvent::Error(_) => {
-                            let _ = app.emit("asr-event", serde_json::json!({
+                            let _ = app_clone.emit("asr-event", serde_json::json!({
                                 "sessionId": session_id,
                                 "event": serde_json::to_value(&event).unwrap_or_default()
                             }));
                             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                            let _ = app.emit("asr-event", serde_json::json!({
+                            let _ = app_clone.emit("asr-event", serde_json::json!({
                                 "sessionId": session_id,
                                 "event": "Finished"
                             }));
@@ -489,7 +587,7 @@ async fn cmd_start_recording(
                                 // 没有 FinalResult，用最后的 PartialResult 作为 fallback
                                 if !last_partial_text.is_empty() {
                                     // 累加统计（fallback 场景，时长为 0）
-                                    if let Ok(store) = app.store("stats.json") {
+                                    if let Ok(store) = app_clone.store("stats.json") {
                                         let prev_chars: i64 = store.get("total_chars")
                                             .and_then(|v| v.as_i64()).unwrap_or(0);
                                         let count: i64 = store.get("total_count")
@@ -498,14 +596,14 @@ async fn cmd_start_recording(
                                         store.set("total_count", serde_json::json!(count + 1));
                                         let _ = store.save();
                                     }
-                                    let _ = app.emit("asr-event", serde_json::json!({
+                                    let _ = app_clone.emit("asr-event", serde_json::json!({
                                         "sessionId": session_id,
                                         "event": {"FinalResult": last_partial_text}
                                     }));
                                 }
                             }
                             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                            let _ = app.emit("asr-event", serde_json::json!({
+                            let _ = app_clone.emit("asr-event", serde_json::json!({
                                 "sessionId": session_id,
                                 "event": "Finished"
                             }));
@@ -526,7 +624,7 @@ async fn cmd_start_recording(
         // channel 断开且没收到过终止事件时，补发 Finished 确保前端不会卡住
         if !terminated {
             log::warn!("[asr-forward] session {} channel ended without terminal event, sending Finished", session_id);
-            let _ = app.emit("asr-event", serde_json::json!({
+            let _ = app_clone.emit("asr-event", serde_json::json!({
                 "sessionId": session_id,
                 "event": "Finished"
             }));
@@ -541,6 +639,39 @@ async fn cmd_start_recording(
         log::debug!("[recording] session {} flag set: is_recording=true", session_id);
     }
 
+    Ok(session_id)
+}
+
+#[tauri::command]
+async fn cmd_start_recording(
+    app: tauri::AppHandle,
+    flag: tauri::State<'_, Arc<Mutex<RecordingFlag>>>,
+    app_id: String,
+    access_key: String,
+    device_name: String,
+) -> Result<(), String> {
+    log::info!("[cmd] start_recording called, device={}", device_name);
+    let asr_config = AsrConfig {
+        app_id,
+        access_key,
+        ..Default::default()
+    };
+    start_recording_inner(&app, &flag, asr_config, device_name)?;
+    Ok(())
+}
+
+/// 内部录音停止逻辑，可从任意线程调用
+fn stop_recording_inner(flag: &Arc<Mutex<RecordingFlag>>) -> Result<(), String> {
+    let mut f = flag.lock().map_err(|e| e.to_string())?;
+    log::info!("[recording] stop_recording_inner, is_recording={}, session_id={}", f.is_recording, f.session_id);
+    if !f.is_recording {
+        return Err("当前没有在录音".to_string());
+    }
+    if let Some(tx) = f.stop_tx.take() {
+        let _ = tx.send(());
+    }
+    f.is_recording = false;
+    log::debug!("[recording] session {} stopped, is_recording=false", f.session_id);
     Ok(())
 }
 
@@ -548,18 +679,8 @@ async fn cmd_start_recording(
 fn cmd_stop_recording(
     flag: tauri::State<'_, Arc<Mutex<RecordingFlag>>>,
 ) -> Result<(), String> {
-    let mut f = flag.lock().map_err(|e| e.to_string())?;
-    log::info!("[cmd] stop_recording called, is_recording={}, session_id={}", f.is_recording, f.session_id);
-    if !f.is_recording {
-        return Err("当前没有在录音".to_string());
-    }
-    // 发送停止信号，桥接线程会收到后停止采集
-    if let Some(tx) = f.stop_tx.take() {
-        let _ = tx.send(());
-    }
-    f.is_recording = false;
-    log::debug!("[recording] session {} stopped, is_recording=false", f.session_id);
-    Ok(())
+    log::info!("[cmd] stop_recording called");
+    stop_recording_inner(&flag)
 }
 
 #[tauri::command]

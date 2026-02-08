@@ -38,7 +38,7 @@ React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 多窗口架构，通过 URL 参数 `?window=floating` 区分窗口类型：
 
 - **main.tsx** → 入口，根据 URL 参数渲染 `<App />` 或 `<FloatingApp />`
-- **App.tsx** → 主窗口根组件，监听后端热键指令，调用录音 command，通过 `emit("floating-control")` 与浮窗通信
+- **App.tsx** → 主窗口根组件，纯设置界面容器（不参与录音控制）
 - **Settings.tsx** — 主设置界面（API 配置、热键配置、输出模式、麦克风选择等）
 - **FloatingApp.tsx** — 浮窗入口，独立窗口，监听 ASR 事件（带 sessionId 过滤）和 floating-control 事件，管理文字输出
 - **FloatingWindow.tsx** — 浮窗 UI 组件（录音状态指示、实时识别文字、计时器）
@@ -51,11 +51,11 @@ React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 
 #### 录音状态管理
 
-后端是唯一的状态权威，前端只做发指令和展示状态：
+后端是唯一的状态权威，录音控制完全在后端闭环，不经过前端 WebView：
 
 - **RecordingFlag**（后端 `lib.rs`）— 唯一真相源，包含 `is_recording`、`session_id`、`stop_tx`
-- **hotkey 转发线程** — 收到 `ToggleRecording` 时读 `RecordingFlag.is_recording`，转换为 `StartRecording`/`StopRecording` 再 emit 给前端
-- **前端不做二次判断** — 收到 `StartRecording` 就 start，`StopRecording` 就 stop
+- **hotkey-forward 线程（后端直控）** — 收到热键后直接从 store 读取配置，调用 `start_recording_inner` / `stop_recording_inner`，并 emit `floating-control` 通知浮窗。不经过前端 WebView，确保主窗口隐藏到托盘后录音控制仍正常工作
+- **前端不参与录音控制** — App.tsx 只负责设置界面，不监听热键事件
 - **ASR 事件携带 sessionId** — 前端用 `maxSessionRef` 比大小过滤旧 session 的迟到事件
 - **Disconnected 不暴露给前端** — 后端内部消化，fallback 为 FinalResult + Finished
 - **异步 listener 注册使用 cancelled 标志** — 防止 React StrictMode 双重执行导致 listener 泄漏

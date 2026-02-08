@@ -88,8 +88,8 @@ impl KeyState {
         }
 
         if binding.key == 0 {
-            // 仅修饰键模式
-            true
+            // 仅修饰键模式：不能有其他普通键同时按下
+            self.pressed_keys.is_empty()
         } else {
             self.pressed_keys.contains(&binding.key)
         }

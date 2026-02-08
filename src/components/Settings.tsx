@@ -18,7 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { HotkeyRecorder } from "./HotkeyRecorder";
 import { AppIcon } from "./AppIcon";
 import { About } from "./About";
-import { Key, Keyboard, Settings2, Info, Plug, RefreshCw, Save, Check, Home, Mic, Type, Clock, Hash } from "lucide-react";
+import { Key, Keyboard, Settings2, Info, Plug, RefreshCw, Save, Check, Home, Type, Clock, Hash } from "lucide-react";
 
 function formatStatsDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
@@ -66,13 +66,6 @@ const defaultSettings: AppSettings = {
 };
 
 export interface SettingsHandle {
-  getRecordingParams: () => {
-    appId: string;
-    accessKey: string;
-    microphoneDevice: string;
-    outputMode: "Clipboard" | "SimulateKeyboard";
-    autoOutput: boolean;
-  };
   showAbout: () => void;
 }
 
@@ -122,15 +115,8 @@ export function Settings({ ref }: SettingsProps) {
   const [stats, setStats] = useState<{ totalDurationMs: number; totalChars: number; totalCount: number } | null>(null);
 
   useImperativeHandle(ref, () => ({
-    getRecordingParams: () => ({
-      appId: settings.appId,
-      accessKey: settings.accessKey,
-      microphoneDevice: settings.microphoneDevice,
-      outputMode: settings.outputMode,
-      autoOutput: settings.autoOutput,
-    }),
     showAbout: () => setActiveTab("about"),
-  }), [settings.appId, settings.accessKey, settings.microphoneDevice, settings.outputMode, settings.autoOutput]);
+  }), []);
 
   useEffect(() => {
     loadDevices();
