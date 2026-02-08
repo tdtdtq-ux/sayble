@@ -81,7 +81,7 @@ impl AudioCapture {
             .map_err(|e| format!("Failed to get default input config: {}", e))?;
 
         log::info!(
-            "Device input config: sample_rate={}, channels={}, format={:?}",
+            "[audio] device input config: sample_rate={}, channels={}, format={:?}",
             supported_config.sample_rate().0,
             supported_config.channels(),
             supported_config.sample_format()
@@ -110,7 +110,7 @@ impl AudioCapture {
                             let _ = data_tx.send(data.to_vec());
                         },
                         move |err| {
-                            log::error!("Audio input error: {}", err);
+                            log::error!("[audio] input error: {}", err);
                         },
                         None,
                     )
@@ -129,7 +129,7 @@ impl AudioCapture {
                             let _ = data_tx.send(converted);
                         },
                         move |err| {
-                            log::error!("Audio input error: {}", err);
+                            log::error!("[audio] input error: {}", err);
                         },
                         None,
                     )
@@ -143,6 +143,9 @@ impl AudioCapture {
         stream
             .play()
             .map_err(|e| format!("Failed to start audio stream: {}", e))?;
+
+        log::info!("[audio] capture started, device_rate={}, channels={}, format={:?}, target_rate={}",
+            device_sample_rate, device_channels, sample_format, TARGET_SAMPLE_RATE);
 
         // 重采样线程：将设备采样率/通道数转换为 16kHz 单声道
         let is_capturing_resample = self.is_capturing.clone();
@@ -180,6 +183,7 @@ impl AudioCapture {
 
     /// 停止采集
     pub fn stop(&mut self) {
+        log::info!("[audio] capture stopped");
         if let Ok(mut capturing) = self.is_capturing.lock() {
             *capturing = false;
         }

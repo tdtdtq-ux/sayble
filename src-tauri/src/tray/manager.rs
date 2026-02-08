@@ -48,7 +48,7 @@ impl TrayManager {
                         }
                     }
                     "about" => {
-                        log::info!("Sayble v0.1.0");
+                        log::info!("[tray] about clicked");
                     }
                     "quit" => {
                         app.exit(0);

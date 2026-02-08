@@ -62,9 +62,22 @@ fn load_hotkey_configs_from_store(app: &tauri::AppHandle) -> Option<Vec<HotkeyCo
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    env_logger::init();
-
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .targets([
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
+                        file_name: Some("sayble".into()),
+                    }),
+                ])
+                .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
+                .max_file_size(5_000_000)
+                .level(log::LevelFilter::Info)
+                .level_for("sayble_lib", log::LevelFilter::Debug)
+                .build(),
+        )
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // 重复启动时，聚焦已有窗口
             if let Some(window) = app.get_webview_window("main") {
@@ -117,7 +130,7 @@ pub fn run() {
             log::info!("[hotkey] initial configs: {:?}", hotkey_configs);
             let mut manager = HotkeyManager::new(hotkey_configs);
             if let Err(e) = manager.start() {
-                log::error!("Failed to start hotkey manager: {}", e);
+                log::error!("[hotkey] failed to start manager: {}", e);
             }
             let manager = Arc::new(Mutex::new(manager));
             app.manage(manager.clone());
@@ -134,7 +147,7 @@ pub fn run() {
             // ToggleRecording 在此处读 RecordingFlag 转换为 StartRecording/StopRecording
             let hotkey_handle = handle.clone();
             let hotkey_flag = recording_flag.clone();
-            log::info!("Hotkey manager running: {}", manager.lock().map(|m| m.is_running()).unwrap_or(false));
+            log::info!("[hotkey] manager running: {}", manager.lock().map(|m| m.is_running()).unwrap_or(false));
             std::thread::spawn(move || {
                 log::info!("[hotkey-forward] thread started");
                 loop {
@@ -171,7 +184,7 @@ pub fn run() {
                 log::info!("[hotkey-forward] thread exiting");
             });
 
-            log::info!("Sayble started");
+            log::info!("[app] Sayble v{} started", env!("CARGO_PKG_VERSION"));
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -202,6 +215,7 @@ fn cmd_list_audio_devices() -> Result<Vec<audio::AudioDevice>, String> {
 
 #[tauri::command]
 fn cmd_output_text(text: String, mode: OutputMode) -> Result<(), String> {
+    log::info!("[cmd] output_text called, mode={:?}, text_len={}", mode, text.len());
     match mode {
         OutputMode::Clipboard => ClipboardOutput::paste(&text),
         OutputMode::SimulateKeyboard => {
@@ -286,6 +300,7 @@ async fn cmd_start_recording(
     access_key: String,
     device_name: String,
 ) -> Result<(), String> {
+    log::info!("[cmd] start_recording called, device={}", device_name);
     log::debug!("[recording] cmd_start_recording called, device={}", device_name);
     // 如果上一次录音还没结束，先强制停掉旧会话
     {
@@ -345,7 +360,7 @@ async fn cmd_start_recording(
         let capture_rx = match audio_capture.start(&device_name) {
             Ok(rx) => rx,
             Err(e) => {
-                log::error!("Failed to start audio capture: {}", e);
+                log::error!("[audio] failed to start capture: {}", e);
                 let _ = event_tx.send(AsrEvent::Error(format!("麦克风启动失败: {}", e)));
                 if let Ok(mut f) = flag_clone.lock() {
                     // 只有 session_id 匹配时才清理，防止覆盖新录音的状态
@@ -496,7 +511,7 @@ fn cmd_stop_recording(
     flag: tauri::State<'_, Arc<Mutex<RecordingFlag>>>,
 ) -> Result<(), String> {
     let mut f = flag.lock().map_err(|e| e.to_string())?;
-    log::debug!("[recording] cmd_stop_recording called, is_recording={}, session_id={}", f.is_recording, f.session_id);
+    log::info!("[cmd] stop_recording called, is_recording={}, session_id={}", f.is_recording, f.session_id);
     if !f.is_recording {
         return Err("当前没有在录音".to_string());
     }

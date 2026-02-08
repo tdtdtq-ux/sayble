@@ -83,8 +83,14 @@ export function FloatingApp() {
       const { sessionId, event } = ev.payload;
 
       // 旧 session 或已取消 session 的事件直接丢弃
-      if (sessionId < maxSessionRef.current) return;
-      if (sessionId === cancelledSessionRef.current) return;
+      if (sessionId < maxSessionRef.current) {
+        console.log("[asr-event] discarded old session:", sessionId, "current:", maxSessionRef.current);
+        return;
+      }
+      if (sessionId === cancelledSessionRef.current) {
+        console.log("[asr-event] discarded cancelled session:", sessionId);
+        return;
+      }
 
       // 新 session 到来，自动 reset
       if (sessionId > maxSessionRef.current) {
@@ -112,19 +118,23 @@ export function FloatingApp() {
       }
 
       if (type === "Connected") {
+        console.log("[asr-event] session", sessionId, "Connected");
         setFloatingStatus("recording");
         showWindow();
       } else if (type === "PartialResult") {
         setPartialText(data);
       } else if (type === "FinalResult") {
+        console.log("[asr-event] session", sessionId, "FinalResult, text_len=", data.length);
         setFinalText(data);
         setFloatingStatus("done");
         clearTimer();
         outputText(data);
       } else if (type === "Finished") {
+        console.log("[asr-event] session", sessionId, "Finished");
         setFloatingStatus("idle");
         hideWindow();
       } else if (type === "Error") {
+        console.error("[asr-event] session", sessionId, "Error:", event);
         setFloatingStatus("idle");
         clearTimer();
         hideWindow();
@@ -156,6 +166,7 @@ export function FloatingApp() {
     }>("floating-control", (event) => {
       if (cancelled) return;
       const { action, outputMode, autoOutput } = event.payload;
+      console.log("[floating-control] received action:", action, "outputMode:", outputMode, "autoOutput:", autoOutput);
       if (action === "start") {
         if (outputMode) {
           outputModeRef.current = outputMode as "Clipboard" | "SimulateKeyboard";

@@ -222,7 +222,7 @@ pub async fn run_asr_session(
         .map_err(|e| format!("WebSocket connect error: {}", e))?;
 
     let _ = event_tx.send(AsrEvent::Connected);
-    log::info!("ASR WebSocket connected, connect_id={}", connect_id);
+    log::info!("[asr] WebSocket connected, connect_id={}", connect_id);
 
     let (mut write, mut read) = ws_stream.split();
 
@@ -234,7 +234,7 @@ pub async fn run_asr_session(
         .await
         .map_err(|e| format!("Send full request error: {}", e))?;
 
-    log::info!("Full client request sent");
+    log::info!("[asr] full client request sent");
 
     // 启动接收任务
     let event_tx_recv = event_tx.clone();
@@ -269,11 +269,11 @@ pub async fn run_asr_session(
                         }
                         Ok((header, None)) => {
                             if header.is_server_ack() {
-                                log::debug!("Server ACK received");
+                                log::debug!("[asr] server ACK received");
                             }
                         }
                         Err(e) => {
-                            log::error!("Parse response error: {}", e);
+                            log::error!("[asr] parse response error: {}", e);
                         }
                     }
                 }
@@ -282,16 +282,16 @@ pub async fn run_asr_session(
                         .as_ref()
                         .map(|f| format!("code={}, reason={}", f.code, f.reason))
                         .unwrap_or_else(|| "no frame".to_string());
-                    log::info!("WebSocket closed by server: {}", reason);
+                    log::info!("[asr] WebSocket closed by server: {}", reason);
                     break;
                 }
                 Some(Err(e)) => {
-                    log::error!("WebSocket recv error: {}", e);
+                    log::error!("[asr] WebSocket recv error: {}", e);
                     let _ = event_tx_recv.send(AsrEvent::Error(format!("WebSocket error: {}", e)));
                     break;
                 }
                 None => {
-                    log::info!("WebSocket stream ended (None)");
+                    log::info!("[asr] WebSocket stream ended (None)");
                     break;
                 }
                 _ => {}
@@ -312,7 +312,7 @@ pub async fn run_asr_session(
 
                 let frame = build_audio_request(&bytes, false)?;
                 if let Err(e) = write.send(Message::Binary(frame.into())).await {
-                    log::error!("Send audio error: {}", e);
+                    log::error!("[asr] send audio error: {}", e);
                     break;
                 }
             }
@@ -320,7 +320,7 @@ pub async fn run_asr_session(
                 // audio channel closed, send last frame
                 let frame = build_audio_request(&[], true)?;
                 let _ = write.send(Message::Binary(frame.into())).await;
-                log::info!("Audio stream ended, last frame sent");
+                log::info!("[asr] audio stream ended, last frame sent");
                 break;
             }
         }
@@ -444,7 +444,7 @@ mod tests {
         };
 
         let result = test_connection(&config).await;
-        println!("Test connection result: {:?}", result);
+        log::info!("Test connection result: {:?}", result);
         assert!(result.is_ok(), "Connection test failed: {:?}", result.err());
     }
 }

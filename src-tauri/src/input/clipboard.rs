@@ -12,10 +12,14 @@ impl ClipboardOutput {
     /// 3. 模拟 Ctrl+V
     /// 4. 恢复原剪贴板内容
     pub fn paste(text: &str) -> Result<(), String> {
+        log::info!("[output] clipboard paste start, text_len={}", text.len());
         let _lock = CLIPBOARD_LOCK.lock().map_err(|e| e.to_string())?;
 
         let mut clipboard =
-            Clipboard::new().map_err(|e| format!("Failed to access clipboard: {}", e))?;
+            Clipboard::new().map_err(|e| {
+                log::error!("[output] failed to access clipboard: {}", e);
+                format!("Failed to access clipboard: {}", e)
+            })?;
 
         // 备份原剪贴板内容
         let backup = clipboard.get_text().ok();
@@ -23,13 +27,19 @@ impl ClipboardOutput {
         // 写入识别结果
         clipboard
             .set_text(text)
-            .map_err(|e| format!("Failed to set clipboard: {}", e))?;
+            .map_err(|e| {
+                log::error!("[output] failed to set clipboard text: {}", e);
+                format!("Failed to set clipboard: {}", e)
+            })?;
 
         // 短暂延迟确保剪贴板数据就绪
         std::thread::sleep(std::time::Duration::from_millis(50));
 
         // 模拟 Ctrl+V
-        simulate_ctrl_v()?;
+        simulate_ctrl_v().map_err(|e| {
+            log::error!("[output] simulate Ctrl+V failed: {}", e);
+            e
+        })?;
 
         // 等待粘贴完成
         std::thread::sleep(std::time::Duration::from_millis(100));
@@ -39,6 +49,7 @@ impl ClipboardOutput {
             let _ = clipboard.set_text(original);
         }
 
+        log::info!("[output] clipboard paste done");
         Ok(())
     }
 

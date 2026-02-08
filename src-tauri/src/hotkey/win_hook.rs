@@ -177,17 +177,17 @@ impl HotkeyManager {
 
                     match hook {
                         Ok(hook) => {
-                            log::info!("Keyboard hook installed successfully");
+                            log::info!("[hotkey] keyboard hook installed");
                             // 消息循环（保持钩子活跃）
                             let mut msg = MSG::default();
                             while GetMessageW(&mut msg, None, 0, 0).as_bool() {
                                 let _ = DispatchMessageW(&msg);
                             }
                             let _ = UnhookWindowsHookEx(hook);
-                            log::info!("Keyboard hook uninstalled");
+                            log::info!("[hotkey] keyboard hook uninstalled");
                         }
                         Err(e) => {
-                            log::error!("Failed to install keyboard hook: {:?}", e);
+                            log::error!("[hotkey] failed to install keyboard hook: {:?}", e);
                         }
                     }
                 }
@@ -203,7 +203,7 @@ impl HotkeyManager {
             let mut key_state = KeyState::default();
             let mut hold_active = false;
 
-            log::info!("[hotkey-state] state processing loop started, configs count: {}", configs.lock().map(|c| c.len()).unwrap_or(0));
+            log::info!("[hotkey] state processing loop started, configs count: {}", configs.lock().map(|c| c.len()).unwrap_or(0));
 
             while *running.lock().unwrap_or_else(|e| e.into_inner()) {
                 match raw_rx.recv_timeout(std::time::Duration::from_millis(100)) {
@@ -222,13 +222,13 @@ impl HotkeyManager {
                                     continue;
                                 }
 
-                                log::info!("[hotkey-state] KeyDown vk=0x{:X}, is_modifier={}, active_modifiers={:?}, pressed_keys={:?}",
+                                log::debug!("[hotkey] KeyDown vk=0x{:X}, is_modifier={}, active_modifiers={:?}, pressed_keys={:?}",
                                     vk, KeyState::is_modifier(vk), key_state.active_modifiers(), key_state.pressed_keys);
 
                                 // 检查 ESC 键取消（始终发送，由前端判断是否在录音）
                                 if vk == 0x1B {
                                     // VK_ESCAPE
-                                    log::info!("[hotkey-state] ESC cancel, hold_active={}", hold_active);
+                                    log::info!("[hotkey] ESC cancel, hold_active={}", hold_active);
                                     let _ = event_tx.send(HotkeyEvent::CancelRecording);
                                     hold_active = false;
                                     continue;
@@ -239,13 +239,13 @@ impl HotkeyManager {
                                     if matched {
                                         match config.mode {
                                             HotkeyMode::Toggle => {
-                                                log::info!("[hotkey-state] Toggle => sending ToggleRecording");
+                                                log::info!("[hotkey] Toggle => sending ToggleRecording");
                                                 let _ = event_tx.send(HotkeyEvent::ToggleRecording);
                                             }
                                             HotkeyMode::HoldToRecord => {
                                                 if !hold_active {
                                                     hold_active = true;
-                                                    log::info!("[hotkey-state] HoldToRecord => sending StartRecording");
+                                                    log::info!("[hotkey] HoldToRecord => sending StartRecording");
                                                     let _ = event_tx
                                                         .send(HotkeyEvent::StartRecording);
                                                 }
