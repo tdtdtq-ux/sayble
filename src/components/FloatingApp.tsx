@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
-import { LogicalPosition } from "@tauri-apps/api/dpi";
+import { LogicalPosition, LogicalSize } from "@tauri-apps/api/dpi";
 import { FloatingWindow, type FloatingStatus } from "@/components/FloatingWindow";
 
 const appWindow = getCurrentWindow();
@@ -44,8 +44,8 @@ export function FloatingApp() {
     if (monitor) {
       const screenWidth = monitor.size.width / monitor.scaleFactor;
       const screenHeight = monitor.size.height / monitor.scaleFactor;
-      const winWidth = 400;
-      const winHeight = 80;
+      const winWidth = 300;
+      const winHeight = 52;
       const x = Math.round((screenWidth - winWidth) / 2);
       const y = Math.round(screenHeight - winHeight - 60);
       await appWindow.setPosition(new LogicalPosition(x, y));
@@ -150,7 +150,7 @@ export function FloatingApp() {
             setFloatingStatus("done");
             clearTimer();
             outputText(partialTextRef.current);
-            hideWindowDelayed(2000);
+            hideWindowDelayed(1000);
           } else {
             setFloatingStatus("idle");
             clearTimer();
@@ -167,7 +167,7 @@ export function FloatingApp() {
             setFloatingStatus("done");
             clearTimer();
             outputText(data);
-            hideWindowDelayed(2000);
+            hideWindowDelayed(1000);
           }
         } else if (type === "Error") {
           setFloatingStatus("idle");

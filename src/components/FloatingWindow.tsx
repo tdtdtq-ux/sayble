@@ -30,47 +30,57 @@ export function FloatingWindow({
 
   if (!visible) return null;
 
+  const displayText =
+    status === "recording"
+      ? partialText || "请开始说话..."
+      : status === "recognizing"
+        ? partialText || "正在识别..."
+        : status === "done"
+          ? finalText
+          : "";
+
   return (
-    <div className="p-2">
-      <div
-        className={cn(
-          "rounded-xl border bg-card px-6 py-4 shadow-lg backdrop-blur-sm",
-          "min-w-[320px] max-w-[600px] transition-all duration-300",
-          status === "recording" && "border-red-500/50",
-          status === "recognizing" && "border-orange-500/50",
-          status === "done" && "border-green-500/50"
-        )}
-      >
-        <div className="flex items-center gap-3">
-          <StatusIndicator status={status} />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">
-                {status === "recording" && "录音中"}
-                {status === "recognizing" && "识别中"}
-                {status === "done" && "识别完成"}
+    <div
+      className={cn(
+        "h-screen w-screen bg-neutral-900 px-3 py-2",
+        "border rounded-lg",
+        status === "recording" && "border-red-500/40",
+        status === "recognizing" && "border-orange-500/40",
+        status === "done" && "border-green-500/40"
+      )}
+    >
+      <div className="flex items-center gap-2 h-full">
+        <StatusIndicator status={status} />
+        <div className="flex-1 min-w-0 overflow-hidden">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-neutral-300 shrink-0">
+              {status === "recording" && "录音中"}
+              {status === "recognizing" && "识别中"}
+              {status === "done" && "完成"}
+            </span>
+            {status === "recording" && (
+              <span className="text-[10px] text-neutral-500 tabular-nums shrink-0">
+                {formatDuration(duration)}
               </span>
-              {status === "recording" && (
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {formatDuration(duration)}
-                </span>
-              )}
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground truncate">
-              {status === "recording" && (partialText || "请开始说话...")}
-              {status === "recognizing" && (partialText || "正在识别...")}
-              {status === "done" && finalText}
+            )}
+          </div>
+          <div className="mt-0.5 overflow-hidden">
+            <p
+              className="text-xs text-neutral-400 whitespace-nowrap"
+              style={{ direction: "rtl", textAlign: "left" }}
+            >
+              {displayText}
             </p>
           </div>
-          {(status === "recording" || status === "recognizing") && (
-            <button
-              onClick={onCancel}
-              className="shrink-0 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-            >
-              Esc 取消
-            </button>
-          )}
         </div>
+        {(status === "recording" || status === "recognizing") && (
+          <button
+            onClick={onCancel}
+            className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300 transition-colors"
+          >
+            Esc
+          </button>
+        )}
       </div>
     </div>
   );
@@ -78,23 +88,23 @@ export function FloatingWindow({
 
 function StatusIndicator({ status }: { status: FloatingStatus }) {
   return (
-    <div className="relative flex h-8 w-8 shrink-0 items-center justify-center">
+    <div className="relative flex h-5 w-5 shrink-0 items-center justify-center">
       {status === "recording" && (
         <>
-          <div className="absolute h-8 w-8 animate-ping rounded-full bg-red-500/20" />
-          <div className="h-3 w-3 rounded-full bg-red-500" />
+          <div className="absolute h-5 w-5 animate-ping rounded-full bg-red-500/20" />
+          <div className="h-2 w-2 rounded-full bg-red-500" />
         </>
       )}
       {status === "recognizing" && (
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
+        <div className="h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-orange-500 border-t-transparent" />
       )}
       {status === "done" && (
         <svg
-          className="h-5 w-5 text-green-500"
+          className="h-3.5 w-3.5 text-green-500"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
-          strokeWidth={2}
+          strokeWidth={2.5}
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
         </svg>
