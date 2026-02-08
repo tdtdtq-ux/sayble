@@ -15,6 +15,7 @@ use tray::TrayManager;
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager};
 use tauri_plugin_store::StoreExt;
+use tauri_plugin_autostart::ManagerExt;
 
 /// 录音状态标志，用于 start/stop 之间通信
 /// session_id 用于防止旧线程清理时覆盖新录音的状态
@@ -75,9 +76,37 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .setup(|app| {
             let handle = app.handle().clone();
             TrayManager::setup(&handle)?;
+
+            // 同步自启动状态：从 store 读取 autoStart，与系统实际状态对比
+            {
+                let autolaunch = app.autolaunch();
+                let want_enabled = app.store("settings.json")
+                    .ok()
+                    .and_then(|store| store.get("app_settings"))
+                    .and_then(|settings| settings.get("autoStart").and_then(|v| v.as_bool()))
+                    .unwrap_or(false);
+                let currently_enabled = autolaunch.is_enabled().unwrap_or(false);
+                if want_enabled && !currently_enabled {
+                    if let Err(e) = autolaunch.enable() {
+                        log::error!("[autostart] failed to enable on setup: {}", e);
+                    } else {
+                        log::info!("[autostart] enabled on setup (was disabled)");
+                    }
+                } else if !want_enabled && currently_enabled {
+                    if let Err(e) = autolaunch.disable() {
+                        log::error!("[autostart] failed to disable on setup: {}", e);
+                    } else {
+                        log::info!("[autostart] disabled on setup (was enabled)");
+                    }
+                }
+            }
 
             // 初始化 HotkeyManager：优先从持久化设置加载，否则用默认配置
             let hotkey_configs = load_hotkey_configs_from_store(&handle)
@@ -207,6 +236,26 @@ fn cmd_save_settings(
         if let Ok(mgr) = hotkey_mgr.lock() {
             log::info!("[hotkey] updating configs on save: {:?}", configs);
             mgr.update_configs(configs);
+        }
+    }
+
+    // 同步自启动状态
+    let auto_start = settings.get("autoStart").and_then(|v| v.as_bool()).unwrap_or(false);
+    let autolaunch = app.autolaunch();
+    if auto_start {
+        if let Err(e) = autolaunch.enable() {
+            log::error!("[autostart] failed to enable: {}", e);
+        } else {
+            log::info!("[autostart] enabled");
+        }
+    } else {
+        let currently_enabled = autolaunch.is_enabled().unwrap_or(false);
+        if currently_enabled {
+            if let Err(e) = autolaunch.disable() {
+                log::error!("[autostart] failed to disable: {}", e);
+            } else {
+                log::info!("[autostart] disabled");
+            }
         }
     }
 
