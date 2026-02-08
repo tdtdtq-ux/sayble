@@ -201,7 +201,6 @@ impl HotkeyManager {
 
             // 状态处理线程
             let mut key_state = KeyState::default();
-            let mut is_recording = false;
             let mut hold_active = false;
 
             log::info!("[hotkey-state] state processing loop started, configs count: {}", configs.lock().map(|c| c.len()).unwrap_or(0));
@@ -226,16 +225,13 @@ impl HotkeyManager {
                                 log::info!("[hotkey-state] KeyDown vk=0x{:X}, is_modifier={}, active_modifiers={:?}, pressed_keys={:?}",
                                     vk, KeyState::is_modifier(vk), key_state.active_modifiers(), key_state.pressed_keys);
 
-                                // 检查 ESC 键取消
+                                // 检查 ESC 键取消（始终发送，由前端判断是否在录音）
                                 if vk == 0x1B {
                                     // VK_ESCAPE
-                                    if is_recording || hold_active {
-                                        log::info!("[hotkey-state] ESC cancel, is_recording={}, hold_active={}", is_recording, hold_active);
-                                        let _ = event_tx.send(HotkeyEvent::CancelRecording);
-                                        is_recording = false;
-                                        hold_active = false;
-                                        continue;
-                                    }
+                                    log::info!("[hotkey-state] ESC cancel, hold_active={}", hold_active);
+                                    let _ = event_tx.send(HotkeyEvent::CancelRecording);
+                                    hold_active = false;
+                                    continue;
                                 }
 
                                 for config in &configs {
@@ -243,14 +239,8 @@ impl HotkeyManager {
                                     if matched {
                                         match config.mode {
                                             HotkeyMode::Toggle => {
-                                                is_recording = !is_recording;
-                                                let event = if is_recording {
-                                                    HotkeyEvent::StartRecording
-                                                } else {
-                                                    HotkeyEvent::StopRecording
-                                                };
-                                                log::info!("[hotkey-state] Toggle => sending {:?}", event);
-                                                let _ = event_tx.send(event);
+                                                log::info!("[hotkey-state] Toggle => sending ToggleRecording");
+                                                let _ = event_tx.send(HotkeyEvent::ToggleRecording);
                                             }
                                             HotkeyMode::HoldToRecord => {
                                                 if !hold_active {

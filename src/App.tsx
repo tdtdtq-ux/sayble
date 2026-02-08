@@ -8,13 +8,8 @@ function App() {
   const [recording, setRecording] = useState(false);
   const unlistenRef = useRef<UnlistenFn | null>(null);
   const settingsRef = useRef<SettingsHandle>(null);
-  const recordingRef = useRef(false);
   const recordingStartTimeRef = useRef(0);
   const MIN_RECORDING_MS = 800;
-
-  useEffect(() => {
-    recordingRef.current = recording;
-  }, [recording]);
 
   useEffect(() => {
     return () => {
@@ -44,27 +39,20 @@ function App() {
 
         // 注册 ASR 事件监听（主窗口只关心录音状态的结束）
         unlistenRef.current?.();
-        const unlisten = await listen<
-          | string
-          | {
-              PartialResult?: string;
-              FinalResult?: string;
-              Error?: string;
-              Connected?: null;
-              Disconnected?: null;
-            }
-        >("asr-event", (event) => {
-          const payload = event.payload;
-          // 主窗口只关心录音结束事件，统一处理字符串和对象两种格式
+        const unlisten = await listen<{
+          sessionId: number;
+          event: string | { FinalResult?: string; Error?: string };
+        }>("asr-event", (ev) => {
+          const { event } = ev.payload;
+          // 主窗口只关心录音结束事件
           let type = "";
-          if (typeof payload === "string") {
-            type = payload;
-          } else if (payload && typeof payload === "object") {
-            if ("FinalResult" in payload) type = "FinalResult";
-            else if ("Error" in payload) type = "Error";
-            else if ("Disconnected" in payload) type = "Disconnected";
+          if (typeof event === "string") {
+            type = event;
+          } else if (event && typeof event === "object") {
+            if ("FinalResult" in event) type = "FinalResult";
+            else if ("Error" in event) type = "Error";
           }
-          if (type === "FinalResult" || type === "Error" || type === "Disconnected") {
+          if (type === "FinalResult" || type === "Error" || type === "Finished") {
             setRecording(false);
           }
         });
@@ -92,11 +80,11 @@ function App() {
     }
     try {
       await invoke("cmd_stop_recording");
-      setRecording(false);
-      await emit("floating-control", { action: "stop" });
     } catch {
-      // ignore
+      // cmd_stop_recording 可能因为后端已经结束而失败，忽略
     }
+    setRecording(false);
+    await emit("floating-control", { action: "stop" });
   }, []);
 
   const cancelRecording = useCallback(async () => {
@@ -110,36 +98,34 @@ function App() {
   }, []);
 
   // 监听后端快捷键事件
+  // 后端已根据 RecordingFlag 判断好了 start/stop，前端直接执行
   useEffect(() => {
-    const setupHotkeyListener = async () => {
-      const unlisten = await listen<string>("hotkey-event", (event) => {
-        const hotkeyEvent = event.payload;
-        if (hotkeyEvent === "StartRecording" || hotkeyEvent === "ToggleRecording") {
-          if (!recordingRef.current) {
-            const params = settingsRef.current?.getRecordingParams();
-            if (params) {
-              startRecording(params);
-            }
-          } else if (hotkeyEvent === "ToggleRecording") {
-            stopRecording();
-          }
-        } else if (hotkeyEvent === "StopRecording") {
-          if (recordingRef.current) {
-            stopRecording();
-          }
-        } else if (hotkeyEvent === "CancelRecording") {
-          if (recordingRef.current) {
-            cancelRecording();
-          }
-        }
-      });
-      return unlisten;
-    };
-
+    let cancelled = false;
     let unlisten: UnlistenFn | null = null;
-    setupHotkeyListener().then((fn) => { unlisten = fn; });
+
+    listen<string>("hotkey-event", (event) => {
+      if (cancelled) return;
+      const hotkeyEvent = event.payload;
+      if (hotkeyEvent === "StartRecording") {
+        const params = settingsRef.current?.getRecordingParams();
+        if (params) {
+          startRecording(params);
+        }
+      } else if (hotkeyEvent === "StopRecording") {
+        stopRecording();
+      } else if (hotkeyEvent === "CancelRecording") {
+        cancelRecording();
+      }
+    }).then((fn) => {
+      if (cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
 
     return () => {
+      cancelled = true;
       unlisten?.();
     };
   }, [startRecording, stopRecording, cancelRecording]);

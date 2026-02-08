@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
-import { LogicalPosition, LogicalSize } from "@tauri-apps/api/dpi";
+import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { FloatingWindow, type FloatingStatus } from "@/components/FloatingWindow";
 
 const appWindow = getCurrentWindow();
@@ -13,12 +13,10 @@ export function FloatingApp() {
   const [finalText, setFinalText] = useState("");
   const [duration, setDuration] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const outputModeRef = useRef<"Clipboard" | "SimulateKeyboard">("Clipboard");
   const autoOutputRef = useRef(true);
-  const cancelledRef = useRef(false);
+  const maxSessionRef = useRef(0);
   const outputDoneRef = useRef(false);
-  const partialTextRef = useRef("");
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -36,10 +34,6 @@ export function FloatingApp() {
   }, [clearTimer]);
 
   const showWindow = useCallback(async () => {
-    if (hideTimerRef.current) {
-      clearTimeout(hideTimerRef.current);
-      hideTimerRef.current = null;
-    }
     const monitor = await currentMonitor();
     if (monitor) {
       const screenWidth = monitor.size.width / monitor.scaleFactor;
@@ -57,50 +51,15 @@ export function FloatingApp() {
     await appWindow.hide();
   }, []);
 
-  const hideWindowDelayed = useCallback((ms: number) => {
-    if (hideTimerRef.current) {
-      clearTimeout(hideTimerRef.current);
-    }
-    hideTimerRef.current = setTimeout(() => {
-      hideWindow();
-      hideTimerRef.current = null;
-    }, ms);
-  }, [hideWindow]);
-
   const resetState = useCallback(() => {
-    // 清理上一次的延迟隐藏 timer，防止它把新录音的窗口藏掉
-    if (hideTimerRef.current) {
-      clearTimeout(hideTimerRef.current);
-      hideTimerRef.current = null;
-    }
     setPartialText("");
     setFinalText("");
     setDuration(0);
-    cancelledRef.current = false;
     outputDoneRef.current = false;
-    partialTextRef.current = "";
-  }, []);
-
-  // 从持久化设置加载输出配置（快捷键触发时用）
-  const loadOutputConfig = useCallback(async () => {
-    try {
-      const settings = await invoke<Record<string, unknown> | null>("cmd_load_settings");
-      if (settings) {
-        if (settings.outputMode === "Clipboard" || settings.outputMode === "SimulateKeyboard") {
-          outputModeRef.current = settings.outputMode;
-        }
-        if (typeof settings.autoOutput === "boolean") {
-          autoOutputRef.current = settings.autoOutput;
-        }
-      }
-    } catch {
-      // 加载失败用默认值
-    }
   }, []);
 
   const outputText = useCallback(async (text: string) => {
-    // 已取消或已输出过，不再输出
-    if (cancelledRef.current || outputDoneRef.current) return;
+    if (outputDoneRef.current) return;
     if (!autoOutputRef.current || !text) return;
     outputDoneRef.current = true;
     try {
@@ -110,154 +69,127 @@ export function FloatingApp() {
     }
   }, []);
 
+  // 监听 ASR 事件（后端驱动，每个事件携带 sessionId）
   useEffect(() => {
-    // 监听 ASR 事件
-    const setupAsrListener = async () => {
-      const unlisten = await listen<
-        | string
-        | {
-            PartialResult?: string;
-            FinalResult?: string;
-            Error?: string;
-            Connected?: null;
-            Disconnected?: null;
-          }
-      >("asr-event", (event) => {
-        // 统一提取事件类型和数据，后端可能发字符串或对象两种格式
-        const payload = event.payload;
-        let type = "";
-        let data = "";
-        if (typeof payload === "string") {
-          type = payload;
-        } else if (payload && typeof payload === "object") {
-          if ("PartialResult" in payload && payload.PartialResult) {
-            type = "PartialResult";
-            data = payload.PartialResult;
-          } else if ("FinalResult" in payload && payload.FinalResult) {
-            type = "FinalResult";
-            data = payload.FinalResult;
-          } else if ("Error" in payload) {
-            type = "Error";
-          } else if ("Connected" in payload) {
-            type = "Connected";
-          } else if ("Disconnected" in payload) {
-            type = "Disconnected";
-          }
-        }
+    let cancelled = false;
+    let unlisten: UnlistenFn | null = null;
 
-        if (type === "Connected") {
-          setFloatingStatus("recording");
-          showWindow();
-        } else if (type === "Disconnected") {
-          // FinalResult 未到达时，用最后的 PartialResult 作为 fallback 输出
-          if (!outputDoneRef.current && !cancelledRef.current && partialTextRef.current) {
-            setFinalText(partialTextRef.current);
-            setFloatingStatus("done");
-            clearTimer();
-            outputText(partialTextRef.current);
-            hideWindowDelayed(1000);
-          } else {
-            setFloatingStatus("idle");
-            clearTimer();
-            hideWindow();
-          }
-        } else if (type === "PartialResult") {
-          if (!cancelledRef.current) {
-            partialTextRef.current = data;
-            setPartialText(data);
-          }
-        } else if (type === "FinalResult") {
-          if (!cancelledRef.current) {
-            setFinalText(data);
-            setFloatingStatus("done");
-            clearTimer();
-            outputText(data);
-            hideWindowDelayed(1000);
-          }
-        } else if (type === "Error") {
-          setFloatingStatus("idle");
-          clearTimer();
-          hideWindow();
-        }
-      });
-      return unlisten;
-    };
+    listen<{
+      sessionId: number;
+      event: string | { PartialResult?: string; FinalResult?: string; Error?: string; Connected?: null };
+    }>("asr-event", (ev) => {
+      if (cancelled) return;
+      const { sessionId, event } = ev.payload;
 
-    // 监听快捷键事件
-    const setupHotkeyListener = async () => {
-      const unlisten = await listen<string>("hotkey-event", (event) => {
-        const hotkeyEvent = event.payload;
-        if (hotkeyEvent === "StartRecording" || hotkeyEvent === "ToggleRecording") {
-          resetState();
-          loadOutputConfig();
-          setFloatingStatus("recording");
-          startTimer();
-          showWindow();
-        } else if (hotkeyEvent === "StopRecording") {
-          setFloatingStatus("recognizing");
-          clearTimer();
-        } else if (hotkeyEvent === "CancelRecording") {
-          cancelledRef.current = true;
-          setFloatingStatus("idle");
-          clearTimer();
-          hideWindow();
-        }
-      });
-      return unlisten;
-    };
+      // 旧 session 的事件直接丢弃
+      if (sessionId < maxSessionRef.current) return;
 
-    let unlistenAsr: UnlistenFn | null = null;
-    let unlistenHotkey: UnlistenFn | null = null;
-    setupAsrListener().then((fn) => { unlistenAsr = fn; });
-    setupHotkeyListener().then((fn) => { unlistenHotkey = fn; });
+      // 新 session 到来，自动 reset
+      if (sessionId > maxSessionRef.current) {
+        maxSessionRef.current = sessionId;
+        resetState();
+      }
+
+      // 解析事件类型
+      let type = "";
+      let data = "";
+      if (typeof event === "string") {
+        type = event;
+      } else if (event && typeof event === "object") {
+        if ("PartialResult" in event && event.PartialResult) {
+          type = "PartialResult";
+          data = event.PartialResult;
+        } else if ("FinalResult" in event && event.FinalResult) {
+          type = "FinalResult";
+          data = event.FinalResult;
+        } else if ("Error" in event) {
+          type = "Error";
+        } else if ("Connected" in event) {
+          type = "Connected";
+        }
+      }
+
+      if (type === "Connected") {
+        setFloatingStatus("recording");
+        showWindow();
+      } else if (type === "PartialResult") {
+        setPartialText(data);
+      } else if (type === "FinalResult") {
+        setFinalText(data);
+        setFloatingStatus("done");
+        clearTimer();
+        outputText(data);
+      } else if (type === "Finished") {
+        setFloatingStatus("idle");
+        hideWindow();
+      } else if (type === "Error") {
+        setFloatingStatus("idle");
+        clearTimer();
+        hideWindow();
+      }
+    }).then((fn) => {
+      if (cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
 
     return () => {
-      unlistenAsr?.();
-      unlistenHotkey?.();
+      cancelled = true;
+      unlisten?.();
       clearTimer();
-      if (hideTimerRef.current) {
-        clearTimeout(hideTimerRef.current);
-      }
     };
-  }, [clearTimer, startTimer, showWindow, hideWindow, hideWindowDelayed, resetState, outputText, loadOutputConfig]);
+  }, [clearTimer, showWindow, hideWindow, resetState, outputText]);
 
   // 监听主窗口发来的控制事件
   useEffect(() => {
-    const setup = async () => {
-      const unlisten = await listen<{
-        action: string;
-        outputMode?: string;
-        autoOutput?: boolean;
-      }>("floating-control", (event) => {
-        const { action, outputMode, autoOutput } = event.payload;
-        if (action === "start") {
-          if (outputMode) {
-            outputModeRef.current = outputMode as "Clipboard" | "SimulateKeyboard";
-          }
-          if (autoOutput !== undefined) {
-            autoOutputRef.current = autoOutput;
-          }
-          resetState();
-          setFloatingStatus("recording");
-          startTimer();
-          showWindow();
-        } else if (action === "stop") {
-          setFloatingStatus("recognizing");
-          clearTimer();
-        } else if (action === "cancel") {
-          cancelledRef.current = true;
-          setFloatingStatus("idle");
-          clearTimer();
-          hideWindow();
-        }
-      });
-      return unlisten;
-    };
-
+    let cancelled = false;
     let unlisten: UnlistenFn | null = null;
-    setup().then((fn) => { unlisten = fn; });
 
-    return () => { unlisten?.(); };
+    listen<{
+      action: string;
+      outputMode?: string;
+      autoOutput?: boolean;
+    }>("floating-control", (event) => {
+      if (cancelled) return;
+      const { action, outputMode, autoOutput } = event.payload;
+      if (action === "start") {
+        if (outputMode) {
+          outputModeRef.current = outputMode as "Clipboard" | "SimulateKeyboard";
+        }
+        if (autoOutput !== undefined) {
+          autoOutputRef.current = autoOutput;
+        }
+        // 递增 maxSessionRef，使旧 session 的迟到事件被丢弃
+        // （新 session 的 Connected 到来时会用真实 sessionId 再次更新）
+        maxSessionRef.current += 1;
+        resetState();
+        setFloatingStatus("recording");
+        startTimer();
+        showWindow();
+      } else if (action === "stop") {
+        setFloatingStatus("recognizing");
+        clearTimer();
+      } else if (action === "cancel") {
+        // cancel 时让 maxSessionRef +1，使当前 session 的后续事件全部被丢弃
+        maxSessionRef.current += 1;
+        setFloatingStatus("idle");
+        clearTimer();
+        hideWindow();
+      }
+    }).then((fn) => {
+      if (cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
   }, [clearTimer, startTimer, showWindow, hideWindow, resetState]);
 
   return (
@@ -267,7 +199,7 @@ export function FloatingApp() {
       finalText={finalText}
       duration={duration}
       onCancel={() => {
-        cancelledRef.current = true;
+        maxSessionRef.current += 1;
         setFloatingStatus("idle");
         clearTimer();
         hideWindow();

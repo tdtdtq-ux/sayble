@@ -85,8 +85,18 @@ pub fn run() {
             let manager = Arc::new(Mutex::new(manager));
             app.manage(manager.clone());
 
+            // 录音状态标志（在 hotkey 转发线程之前创建，以便线程能引用）
+            let recording_flag = Arc::new(Mutex::new(RecordingFlag {
+                is_recording: false,
+                session_id: 0,
+                stop_tx: None,
+            }));
+            app.manage(recording_flag.clone());
+
             // 后台线程：轮询 HotkeyManager 事件并 emit 到前端
+            // ToggleRecording 在此处读 RecordingFlag 转换为 StartRecording/StopRecording
             let hotkey_handle = handle.clone();
+            let hotkey_flag = recording_flag.clone();
             log::info!("Hotkey manager running: {}", manager.lock().map(|m| m.is_running()).unwrap_or(false));
             std::thread::spawn(move || {
                 log::info!("[hotkey-forward] thread started");
@@ -99,23 +109,30 @@ pub fn run() {
                         }
                         mgr.try_recv()
                     };
-                    if let Some(ref event) = event {
-                        log::info!("[hotkey-forward] received event: {:?}, emitting to frontend", event);
-                        let result = hotkey_handle.emit("hotkey-event", &event);
-                        log::info!("[hotkey-forward] emit result: {:?}", result);
+                    if let Some(event) = event {
+                        use hotkey::HotkeyEvent;
+                        // Toggle 时读后端真实录音状态，转换为具体指令
+                        let event = match event {
+                            HotkeyEvent::ToggleRecording => {
+                                let is_rec = hotkey_flag.lock()
+                                    .map(|f| f.is_recording)
+                                    .unwrap_or(false);
+                                if is_rec {
+                                    HotkeyEvent::StopRecording
+                                } else {
+                                    HotkeyEvent::StartRecording
+                                }
+                            }
+                            other => other,
+                        };
+                        log::debug!("[hotkey-forward] emitting to frontend: {:?}", event);
+                        let _ = hotkey_handle.emit("hotkey-event", &event);
                     } else {
                         std::thread::sleep(std::time::Duration::from_millis(50));
                     }
                 }
                 log::info!("[hotkey-forward] thread exiting");
             });
-
-            // 录音状态标志
-            app.manage(Arc::new(Mutex::new(RecordingFlag {
-                is_recording: false,
-                session_id: 0,
-                stop_tx: None,
-            })));
 
             log::info!("Voice Keyboard started");
             Ok(())
@@ -204,9 +221,11 @@ async fn cmd_start_recording(
     access_key: String,
     device_name: String,
 ) -> Result<(), String> {
+    log::debug!("[recording] cmd_start_recording called, device={}", device_name);
     // 如果上一次录音还没结束，先强制停掉旧会话
     {
         let mut f = flag.lock().map_err(|e| e.to_string())?;
+        log::debug!("[recording] current flag: is_recording={}, session_id={}", f.is_recording, f.session_id);
         if f.is_recording {
             log::warn!("[recording] force stopping previous session {}", f.session_id);
             if let Some(tx) = f.stop_tx.take() {
@@ -224,10 +243,13 @@ async fn cmd_start_recording(
 
     VolcEngineAsr::validate_config(&asr_config)?;
 
-    // 分配新 session_id
+    // 分配新 session_id（在 spawn 线程之前，一次锁内完成递增和写入）
     let session_id = {
-        let f = flag.lock().map_err(|e| e.to_string())?;
-        f.session_id.wrapping_add(1)
+        let mut f = flag.lock().map_err(|e| e.to_string())?;
+        let new_id = f.session_id.wrapping_add(1);
+        f.session_id = new_id;
+        log::debug!("[recording] allocated session_id={}", new_id);
+        new_id
     };
 
     // 1. 构建 channel，直接调用 run_asr_session（在 Tauri 的 tokio runtime 中）
@@ -305,24 +327,91 @@ async fn cmd_start_recording(
     });
 
     // 5. 后台 tokio task：轮询 ASR 事件并 emit 到前端
+    //    每个事件包装为 { sessionId, event }，Disconnected 内部消化，新增 Finished
     tokio::spawn(async move {
+        log::debug!("[asr-forward] session {} forward task started", session_id);
+        let mut last_partial_text = String::new();
+        let mut had_final = false;
+        let mut terminated = false;
         loop {
             match event_rx.try_recv() {
                 Ok(event) => {
-                    let is_terminal = matches!(
-                        event,
-                        AsrEvent::FinalResult(_) | AsrEvent::Disconnected | AsrEvent::Error(_)
-                    );
-                    let _ = app.emit("asr-event", &event);
-                    if is_terminal {
-                        break;
+                    log::debug!("[asr-forward] session {} received: {:?}", session_id, event);
+                    match &event {
+                        AsrEvent::Connected => {
+                            let _ = app.emit("asr-event", serde_json::json!({
+                                "sessionId": session_id,
+                                "event": serde_json::to_value(&event).unwrap_or_default()
+                            }));
+                        }
+                        AsrEvent::PartialResult(text) => {
+                            last_partial_text = text.clone();
+                            let _ = app.emit("asr-event", serde_json::json!({
+                                "sessionId": session_id,
+                                "event": serde_json::to_value(&event).unwrap_or_default()
+                            }));
+                        }
+                        AsrEvent::FinalResult(_) => {
+                            had_final = true;
+                            let _ = app.emit("asr-event", serde_json::json!({
+                                "sessionId": session_id,
+                                "event": serde_json::to_value(&event).unwrap_or_default()
+                            }));
+                            // FinalResult 后等 1 秒再发 Finished，让前端展示"完成"状态
+                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                            let _ = app.emit("asr-event", serde_json::json!({
+                                "sessionId": session_id,
+                                "event": "Finished"
+                            }));
+                            terminated = true;
+                            break;
+                        }
+                        AsrEvent::Error(_) => {
+                            let _ = app.emit("asr-event", serde_json::json!({
+                                "sessionId": session_id,
+                                "event": serde_json::to_value(&event).unwrap_or_default()
+                            }));
+                            terminated = true;
+                            break;
+                        }
+                        AsrEvent::Disconnected => {
+                            // 内部消化：不暴露给前端
+                            if !had_final {
+                                // 没有 FinalResult，用最后的 PartialResult 作为 fallback
+                                if !last_partial_text.is_empty() {
+                                    let fallback = AsrEvent::FinalResult(last_partial_text.clone());
+                                    let _ = app.emit("asr-event", serde_json::json!({
+                                        "sessionId": session_id,
+                                        "event": serde_json::to_value(&fallback).unwrap_or_default()
+                                    }));
+                                }
+                            }
+                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                            let _ = app.emit("asr-event", serde_json::json!({
+                                "sessionId": session_id,
+                                "event": "Finished"
+                            }));
+                            terminated = true;
+                            break;
+                        }
                     }
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => {
                     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                 }
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    log::debug!("[asr-forward] session {} channel disconnected", session_id);
+                    break;
+                }
             }
+        }
+        // channel 断开且没收到过终止事件时，补发 Finished 确保前端不会卡住
+        if !terminated {
+            log::warn!("[asr-forward] session {} channel ended without terminal event, sending Finished", session_id);
+            let _ = app.emit("asr-event", serde_json::json!({
+                "sessionId": session_id,
+                "event": "Finished"
+            }));
         }
     });
 
@@ -330,8 +419,8 @@ async fn cmd_start_recording(
     {
         let mut f = flag.lock().map_err(|e| e.to_string())?;
         f.is_recording = true;
-        f.session_id = session_id;
         f.stop_tx = Some(stop_tx);
+        log::debug!("[recording] session {} flag set: is_recording=true", session_id);
     }
 
     Ok(())
@@ -342,6 +431,7 @@ fn cmd_stop_recording(
     flag: tauri::State<'_, Arc<Mutex<RecordingFlag>>>,
 ) -> Result<(), String> {
     let mut f = flag.lock().map_err(|e| e.to_string())?;
+    log::debug!("[recording] cmd_stop_recording called, is_recording={}, session_id={}", f.is_recording, f.session_id);
     if !f.is_recording {
         return Err("当前没有在录音".to_string());
     }
@@ -350,5 +440,6 @@ fn cmd_stop_recording(
         let _ = tx.send(());
     }
     f.is_recording = false;
+    log::debug!("[recording] session {} stopped, is_recording=false", f.session_id);
     Ok(())
 }
