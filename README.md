@@ -30,7 +30,7 @@
 
 ```bash
 # 克隆项目
-git clone https://github.com/jasonchou021/sayble.git
+git clone https://github.com/tdtdtq-ux/sayble.git
 cd sayble
 
 # 安装前端依赖
