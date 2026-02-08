@@ -451,6 +451,11 @@ async fn cmd_start_recording(
                                 "sessionId": session_id,
                                 "event": serde_json::to_value(&event).unwrap_or_default()
                             }));
+                            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                            let _ = app.emit("asr-event", serde_json::json!({
+                                "sessionId": session_id,
+                                "event": "Finished"
+                            }));
                             terminated = true;
                             break;
                         }

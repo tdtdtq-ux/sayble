@@ -5,7 +5,8 @@ import { attachConsole } from "@tauri-apps/plugin-log";
 import App from "./App";
 import { FloatingApp } from "./components/FloatingApp";
 
-// 将前端 console.log/warn/error 也写入日志文件
+// 将后端 Rust 日志转发到浏览器 DevTools 控制台（方便开发调试）
+// 注意：前端日志写入文件需使用 @tauri-apps/plugin-log 的 info/warn/error 函数
 attachConsole().catch((e) => console.error("Failed to attach console to log plugin:", e));
 
 const params = new URLSearchParams(window.location.search);

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
+import { info, debug, error as logError } from "@tauri-apps/plugin-log";
 import { FloatingWindow, type FloatingStatus } from "@/components/FloatingWindow";
 
 const appWindow = getCurrentWindow();
@@ -11,6 +12,7 @@ export function FloatingApp() {
   const [floatingStatus, setFloatingStatus] = useState<FloatingStatus>("idle");
   const [partialText, setPartialText] = useState("");
   const [finalText, setFinalText] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
   const [duration, setDuration] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const outputModeRef = useRef<"Clipboard" | "SimulateKeyboard">("Clipboard");
@@ -55,6 +57,7 @@ export function FloatingApp() {
   const resetState = useCallback(() => {
     setPartialText("");
     setFinalText("");
+    setErrorMessage("");
     setDuration(0);
     outputDoneRef.current = false;
   }, []);
@@ -66,7 +69,7 @@ export function FloatingApp() {
     try {
       await invoke("cmd_output_text", { text, mode: outputModeRef.current });
     } catch (e) {
-      console.error("Failed to output text:", e);
+      logError("[output] Failed to output text: " + e);
     }
   }, []);
 
@@ -84,11 +87,11 @@ export function FloatingApp() {
 
       // 旧 session 或已取消 session 的事件直接丢弃
       if (sessionId < maxSessionRef.current) {
-        console.log("[asr-event] discarded old session:", sessionId, "current:", maxSessionRef.current);
+        debug("[asr-event] discarded old session: " + sessionId + " current: " + maxSessionRef.current);
         return;
       }
       if (sessionId === cancelledSessionRef.current) {
-        console.log("[asr-event] discarded cancelled session:", sessionId);
+        debug("[asr-event] discarded cancelled session: " + sessionId);
         return;
       }
 
@@ -118,26 +121,33 @@ export function FloatingApp() {
       }
 
       if (type === "Connected") {
-        console.log("[asr-event] session", sessionId, "Connected");
+        info("[asr-event] session " + sessionId + " Connected");
         setFloatingStatus("recording");
         showWindow();
       } else if (type === "PartialResult") {
         setPartialText(data);
       } else if (type === "FinalResult") {
-        console.log("[asr-event] session", sessionId, "FinalResult, text_len=", data.length);
+        info("[asr-event] session " + sessionId + " FinalResult, text_len=" + data.length);
         setFinalText(data);
         setFloatingStatus("done");
         clearTimer();
         outputText(data);
       } else if (type === "Finished") {
-        console.log("[asr-event] session", sessionId, "Finished");
+        info("[asr-event] session " + sessionId + " Finished");
         setFloatingStatus("idle");
         hideWindow();
       } else if (type === "Error") {
-        console.error("[asr-event] session", sessionId, "Error:", event);
-        setFloatingStatus("idle");
+        logError("[asr-event] session " + sessionId + " Error: " + JSON.stringify(event));
+        const errStr = typeof event === "object" && "Error" in event ? String(event.Error) : "未知错误";
+        const friendly = errStr.includes("TLS") || errStr.includes("handshake")
+          ? "连接失败，请检查网络"
+          : errStr.includes("timeout")
+            ? "连接超时"
+            : errStr.length > 30 ? errStr.slice(0, 30) + "…" : errStr;
+        setErrorMessage(friendly);
+        setFloatingStatus("error");
         clearTimer();
-        hideWindow();
+        showWindow();
       }
     }).then((fn) => {
       if (cancelled) {
@@ -166,7 +176,7 @@ export function FloatingApp() {
     }>("floating-control", (event) => {
       if (cancelled) return;
       const { action, outputMode, autoOutput } = event.payload;
-      console.log("[floating-control] received action:", action, "outputMode:", outputMode, "autoOutput:", autoOutput);
+      info("[floating-control] received action: " + action + " outputMode: " + outputMode + " autoOutput: " + autoOutput);
       if (action === "start") {
         if (outputMode) {
           outputModeRef.current = outputMode as "Clipboard" | "SimulateKeyboard";
@@ -208,6 +218,7 @@ export function FloatingApp() {
       partialText={partialText}
       finalText={finalText}
       duration={duration}
+      errorMessage={errorMessage}
       onCancel={() => {
         cancelledSessionRef.current = maxSessionRef.current;
         setFloatingStatus("idle");

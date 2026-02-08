@@ -79,7 +79,7 @@ npm run tauri build
 
 ## 📖 使用方式
 
-1. 首次启动后在 **API 配置** 页填写火山引擎的 App ID 和 Access Key，点击保存
+1. 首次启动后在 **API 配置** 页填写[火山引擎（豆包流式语音识别模型2.0-小时版）](https://www.volcengine.com/docs/6561/1354869)的 App ID 和 Access Key，点击保存
 2. 使用默认快捷键开始语音输入：
 
    | 快捷键 | 模式 | 说明 |

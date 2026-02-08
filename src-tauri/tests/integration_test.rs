@@ -240,7 +240,7 @@ fn decode_mp3_to_pcm(path: &std::path::Path) -> Vec<i16> {
 #[tokio::test]
 #[ignore] // 需要 .env.local 中配置有效密钥，手动运行: cargo test -- --ignored
 async fn test_asr_with_mp3_file() {
-    let _ = env_logger::builder().is_test(true).try_init();
+    let _ = log::set_max_level(log::LevelFilter::Debug);
 
     // 1. 加载 .env.local 配置
     let env_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emit, type UnlistenFn } from "@tauri-apps/api/event";
+import { info, warn, error as logError } from "@tauri-apps/plugin-log";
 import { Settings, type SettingsHandle } from "@/components/Settings";
 
 function App() {
@@ -64,7 +65,7 @@ function App() {
         });
         recordingStartTimeRef.current = Date.now();
       } catch (e) {
-        console.error("[recording] startRecording failed:", e);
+        logError("[recording] startRecording failed: " + e);
       }
     },
     []
@@ -79,7 +80,7 @@ function App() {
     try {
       await invoke("cmd_stop_recording");
     } catch (e) {
-      console.warn("[recording] cmd_stop_recording failed (may already stopped):", e);
+      warn("[recording] cmd_stop_recording failed (may already stopped): " + e);
     }
     await emit("floating-control", { action: "stop" });
   }, []);
@@ -127,13 +128,13 @@ function App() {
     listen<string>("hotkey-event", (event) => {
       if (cancelled) return;
       const hotkeyEvent = event.payload;
-      console.log("[hotkey] received:", hotkeyEvent);
+      info("[hotkey] received: " + hotkeyEvent);
       if (hotkeyEvent === "StartRecording") {
         const params = settingsRef.current?.getRecordingParams();
         if (params) {
           startRecording(params);
         } else {
-          console.warn("[hotkey] StartRecording ignored: no recording params available");
+          warn("[hotkey] StartRecording ignored: no recording params available");
         }
       } else if (hotkeyEvent === "StopRecording") {
         stopRecording();

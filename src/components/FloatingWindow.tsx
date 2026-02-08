@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
-export type FloatingStatus = "idle" | "recording" | "recognizing" | "done";
+export type FloatingStatus = "idle" | "recording" | "recognizing" | "done" | "error";
 
 interface FloatingWindowProps {
   status: FloatingStatus;
   partialText: string;
   finalText: string;
   duration: number;
+  errorMessage?: string;
   onCancel?: () => void;
 }
 
@@ -16,6 +17,7 @@ export function FloatingWindow({
   partialText,
   finalText,
   duration,
+  errorMessage,
   onCancel,
 }: FloatingWindowProps) {
   const [visible, setVisible] = useState(false);
@@ -37,7 +39,9 @@ export function FloatingWindow({
         ? partialText || "正在识别..."
         : status === "done"
           ? finalText
-          : "";
+          : status === "error"
+            ? errorMessage || "连接失败"
+            : "";
 
   return (
     <div
@@ -46,7 +50,8 @@ export function FloatingWindow({
         "border rounded-lg",
         status === "recording" && "border-red-500/40",
         status === "recognizing" && "border-orange-500/40",
-        status === "done" && "border-green-500/40"
+        status === "done" && "border-green-500/40",
+        status === "error" && "border-yellow-500/40"
       )}
     >
       <div className="flex items-center gap-2 h-full">
@@ -57,6 +62,7 @@ export function FloatingWindow({
               {status === "recording" && "录音中"}
               {status === "recognizing" && "识别中"}
               {status === "done" && "完成"}
+              {status === "error" && "出错"}
             </span>
             {status === "recording" && (
               <span className="text-[10px] text-neutral-500 tabular-nums shrink-0">
@@ -107,6 +113,17 @@ function StatusIndicator({ status }: { status: FloatingStatus }) {
           strokeWidth={2.5}
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+      )}
+      {status === "error" && (
+        <svg
+          className="h-3.5 w-3.5 text-yellow-500"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2.5}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01" />
         </svg>
       )}
     </div>
