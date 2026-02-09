@@ -1,9 +1,10 @@
 use crate::config::{HotkeyBinding, HotkeyConfig, HotkeyMode, Modifier};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Instant;
 
 #[cfg(windows)]
 use std::sync::atomic::{AtomicPtr, Ordering};
@@ -36,12 +37,47 @@ pub enum HotkeyEvent {
     CancelRecording,
 }
 
+/// 普通键超时时间（秒）：超过此时间未收到 KeyUp 则自动清除
+const KEY_EXPIRE_SECS: u64 = 5;
+
+/// 判断虚拟键码是否为已知的普通键（字母、数字、标点、功能键等）
+/// 过滤掉未知/特殊键码，防止因 KeyUp 丢失导致 pressed_keys 永久卡住
+fn is_known_key(vk: u32) -> bool {
+    matches!(vk,
+        0x08..=0x09 |       // Backspace, Tab
+        0x0D |              // Enter
+        0x1B |              // Escape
+        0x20 |              // Space
+        0x21..=0x2E |       // PageUp ~ Delete
+        0x30..=0x39 |       // 0-9
+        0x41..=0x5A |       // A-Z
+        0x60..=0x6F |       // Numpad 0-9, *, +, -, ., /
+        0x70..=0x87 |       // F1-F24
+        0xBA..=0xC0 |       // ;=,-./`
+        0xDB..=0xDF |       // [\]'
+        0xE2                // OEM_102
+    )
+}
+
 /// 按键状态追踪
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct KeyState {
     pressed_modifiers: HashSet<u32>,
     pressed_keys: HashSet<u32>,
+    /// 普通键按下时间戳，用于超时清理
+    key_press_times: HashMap<u32, Instant>,
 }
+
+impl Default for KeyState {
+    fn default() -> Self {
+        Self {
+            pressed_modifiers: HashSet::new(),
+            pressed_keys: HashSet::new(),
+            key_press_times: HashMap::new(),
+        }
+    }
+}
+
 
 impl KeyState {
     fn modifier_from_vk(vk: u32) -> Option<Modifier> {
@@ -70,6 +106,28 @@ impl KeyState {
 
     fn is_modifier(vk: u32) -> bool {
         Self::modifier_from_vk(vk).is_some()
+    }
+
+    /// 清除超时的普通键（KeyUp 丢失保护）
+    fn expire_stale_keys(&mut self) {
+        let now = Instant::now();
+        let expired: Vec<u32> = self
+            .key_press_times
+            .iter()
+            .filter(|(_, t)| now.duration_since(**t).as_secs() >= KEY_EXPIRE_SECS)
+            .map(|(&vk, _)| vk)
+            .collect();
+        for vk in &expired {
+            self.pressed_keys.remove(vk);
+            self.key_press_times.remove(vk);
+        }
+        if !expired.is_empty() {
+            log::debug!(
+                "[hotkey] expired stale keys: {:?}, remaining pressed_keys={:?}",
+                expired,
+                self.pressed_keys
+            );
+        }
     }
 
     fn active_modifiers(&self) -> HashSet<Modifier> {
@@ -212,11 +270,24 @@ impl HotkeyManager {
 
                         match raw_event {
                             RawKeyEvent::KeyDown(vk) => {
+                                // 过滤未知键码：非修饰键且不在已知键码范围内，直接忽略
+                                if !KeyState::is_modifier(vk) && !is_known_key(vk) {
+                                    log::debug!("[hotkey] ignoring unknown vk=0x{:X}", vk);
+                                    continue;
+                                }
+
+                                // 每次 KeyDown 时顺便清理超时的 stale keys
+                                key_state.expire_stale_keys();
+
                                 // 去重：忽略 Windows 按键重复（键已在 pressed 集合中）
                                 let is_repeat = if KeyState::is_modifier(vk) {
                                     !key_state.pressed_modifiers.insert(vk)
                                 } else {
-                                    !key_state.pressed_keys.insert(vk)
+                                    let inserted = key_state.pressed_keys.insert(vk);
+                                    if inserted {
+                                        key_state.key_press_times.insert(vk, Instant::now());
+                                    }
+                                    !inserted
                                 };
                                 if is_repeat {
                                     continue;
@@ -259,6 +330,7 @@ impl HotkeyManager {
                                     key_state.pressed_modifiers.remove(&vk);
                                 } else {
                                     key_state.pressed_keys.remove(&vk);
+                                    key_state.key_press_times.remove(&vk);
                                 }
 
                                 // 长按模式松开检测
@@ -278,7 +350,10 @@ impl HotkeyManager {
                             }
                         }
                     }
-                    Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        // 每次超时（100ms）时清理过期的 stale keys
+                        key_state.expire_stale_keys();
+                    }
                     Err(mpsc::RecvTimeoutError::Disconnected) => break,
                 }
             }
