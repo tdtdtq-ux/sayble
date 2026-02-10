@@ -6,6 +6,7 @@ import { VoiceSettings } from "./VoiceSettings";
 import { GeneralSettings } from "./GeneralSettings";
 import { PolishSettings } from "./polish/PolishSettings";
 import { About } from "./About";
+import { AppIcon } from "./AppIcon";
 import { defaultSettings, type AppSettings } from "@/types/settings";
 import { defaultPolishSettings, builtinPrompts, type PolishSettings as PolishSettingsType } from "@/types/polish";
 
@@ -117,33 +118,41 @@ export function Settings({ ref, onBack, onAutostartWarning }: SettingsProps) {
   return (
     <div className="h-full flex">
       {/* 左侧菜单 */}
-      <nav className="shrink-0 w-36 border-r px-3 pt-6 pb-3 flex flex-col gap-1">
-        <div className="flex items-center gap-2 px-3 pb-4">
-          {onBack && (
+      <div className="w-56 shrink-0 border-r flex flex-col">
+        <div className="px-4 pt-6 pb-4">
+          <h1 className="text-lg font-bold tracking-tight flex items-center gap-2">
+            <AppIcon className="size-5" />
+            Sayble
+          </h1>
+        </div>
+        <nav className="flex-1 px-3 flex flex-col gap-1">
+          {menuItems.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors text-left ${
+                activeTab === key
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              }`}
+            >
+              <Icon className="size-4 shrink-0" />
+              {label}
+            </button>
+          ))}
+        </nav>
+        {onBack && (
+          <div className="px-4 pb-4">
             <button
               onClick={onBack}
-              className="size-8 rounded-md hover:bg-muted flex items-center justify-center transition-colors"
+              className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
             >
-              <ArrowLeft className="size-5" />
+              <ArrowLeft className="size-4 shrink-0" />
+              返回首页
             </button>
-          )}
-          <h1 className="text-lg font-bold tracking-tight">设置</h1>
-        </div>
-        {menuItems.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors text-left ${
-              activeTab === key
-                ? "bg-muted text-foreground"
-                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-            }`}
-          >
-            <Icon className="size-4 shrink-0" />
-            {label}
-          </button>
-        ))}
-      </nav>
+          </div>
+        )}
+      </div>
 
       {/* 右侧内容区 */}
       <div className="flex-1 min-w-0 overflow-y-auto custom-scrollbar px-6 pt-6 pb-6">

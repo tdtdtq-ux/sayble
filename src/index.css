@@ -51,6 +51,10 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
+  button,
+  [role="button"] {
+    cursor: pointer;
+  }
   /* floating 窗口：黑色背景铺满、无滚动条 */
   html.floating-window,
   html.floating-window body,
