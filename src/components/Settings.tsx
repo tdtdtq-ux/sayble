@@ -20,8 +20,8 @@ interface SettingsProps {
 }
 
 const menuItems = [
-  { key: "voice", label: "语音", icon: Mic },
-  { key: "polish", label: "润色", icon: Sparkles },
+  { key: "voice", label: "ASR识别", icon: Mic },
+  { key: "polish", label: "LLM润色", icon: Sparkles },
   { key: "general", label: "通用", icon: Settings2 },
   { key: "about", label: "关于", icon: Info },
 ] as const;

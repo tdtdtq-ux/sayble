@@ -68,7 +68,7 @@ export function PolishProviderManager({ providers, onChange }: PolishProviderMan
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-muted-foreground">供应商列表</h3>
+        <h3 className="text-sm font-medium text-muted-foreground">供应商列表（OpenAI 兼容）</h3>
         <Button
           variant="outline"
           size="sm"
@@ -144,7 +144,7 @@ export function PolishProviderManager({ providers, onChange }: PolishProviderMan
           <DialogHeader>
             <DialogTitle>{editingProvider ? "编辑供应商" : "新建供应商"}</DialogTitle>
             <DialogDescription>
-              {editingProvider ? "修改供应商的连接信息" : "填写新供应商的连接信息"}
+              填写 OpenAI 兼容供应商的连接信息
             </DialogDescription>
           </DialogHeader>
           <PolishProviderForm

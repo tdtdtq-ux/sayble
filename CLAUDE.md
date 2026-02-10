@@ -39,13 +39,18 @@ React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 
 - **main.tsx** → 入口，根据 URL 参数渲染 `<App />` 或 `<FloatingApp />`
 - **App.tsx** → 主窗口根组件，纯设置界面容器（不参与录音控制）
-- **Settings.tsx** — 设置页框架（左侧菜单 + 数据加载/保存 + tab 路由），统一管理所有设置状态
+- **Settings.tsx** — 设置页框架（左侧菜单 + 数据加载/保存 + tab 路由），统一管理所有设置状态，菜单项：ASR识别 / LLM润色 / 通用 / 关于
 - **VoiceSettings.tsx** — 语音设置 tab（火山引擎 API 配置、语言、自动标点、连接测试）
 - **GeneralSettings.tsx** — 通用设置 tab 框架（Tabs 路由：首页 / 快捷键 / 数据）
 - **general/GeneralHome.tsx** — 通用首页 tab（输出方式、麦克风、自动输出、自启动）
 - **general/HotkeySettings.tsx** — 快捷键 tab（切换模式、长按模式）
 - **general/DataSettings.tsx** — 数据 tab（设置文件路径、日志路径、打开文件夹）
 - **polish/PolishSettings.tsx** — 润色设置 tab（供应商、Prompt、开关）
+- **polish/PolishHome.tsx** — 润色首页（开关、供应商/Prompt 选择）
+- **polish/PolishProviderManager.tsx** — 供应商列表管理（Dialog 弹窗编辑，测试连接）
+- **polish/PolishProviderForm.tsx** — 供应商表单（OpenAI 兼容 API 配置）
+- **polish/PolishPromptManager.tsx** — Prompt 模板列表管理（Dialog 弹窗编辑）
+- **polish/PolishPromptForm.tsx** — Prompt 模板表单
 - **FloatingApp.tsx** — 浮窗入口，独立窗口，监听 ASR 事件（带 sessionId 过滤）和 floating-control 事件，管理文字输出
 - **FloatingWindow.tsx** — 浮窗 UI 组件（录音状态指示、实时识别文字、计时器）
 - **HotkeyRecorder.tsx** — 快捷键录制组件
