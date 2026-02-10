@@ -419,20 +419,27 @@ export function Settings({ ref, onAutostartWarning }: SettingsProps) {
               <div className="flex items-center justify-between">
                 <Label htmlFor="autoStart">开机自启</Label>
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        const result = await invoke<string | null>("cmd_check_autostart");
-                        onAutostartWarning?.(result);
-                      } catch {
-                        onAutostartWarning?.(null);
-                      }
-                    }}
-                    className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
-                  >
-                    检测
-                  </button>
+                  {settings.autoStart && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const result = await invoke<string | null>("cmd_check_autostart");
+                          if (result) {
+                            onAutostartWarning?.(result);
+                          } else {
+                            onAutostartWarning?.(null);
+                            toast.success("自启动状态正常");
+                          }
+                        } catch {
+                          onAutostartWarning?.(null);
+                        }
+                      }}
+                      className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
+                    >
+                      检测
+                    </button>
+                  )}
                   <Switch
                     id="autoStart"
                     checked={settings.autoStart}
