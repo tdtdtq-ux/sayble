@@ -254,7 +254,8 @@ pub fn run() {
             let handle = app.handle().clone();
             TrayManager::setup(&handle)?;
 
-            // 同步自启动状态：从 store 读取 autoStart，与系统实际状态对比
+            // 同步自启动状态：用户未开启但系统中启用了，则关闭
+            // 用户开启但被第三方禁用的情况，由前端主动调用 cmd_check_autostart 检测并提示
             {
                 let autolaunch = app.autolaunch();
                 let want_enabled = app.store("settings.json")
@@ -263,26 +264,11 @@ pub fn run() {
                     .and_then(|settings| settings.get("autoStart").and_then(|v| v.as_bool()))
                     .unwrap_or(false);
                 let currently_enabled = autolaunch.is_enabled().unwrap_or(false);
-                if want_enabled && !currently_enabled {
-                    if let Err(e) = autolaunch.enable() {
-                        log::error!("[autostart] failed to enable on setup: {}", e);
-                    } else {
-                        log::info!("[autostart] enabled on setup (was disabled)");
-                    }
-                } else if !want_enabled && currently_enabled {
+                if !want_enabled && currently_enabled {
                     if let Err(e) = autolaunch.disable() {
                         log::error!("[autostart] failed to disable on setup: {}", e);
                     } else {
                         log::info!("[autostart] disabled on setup (was enabled)");
-                    }
-                }
-
-                // 检测自启动是否被第三方软件劫持（仅在用户开启了自启动时检测）
-                #[cfg(target_os = "windows")]
-                if want_enabled {
-                    if let Some(hijacker) = check_autostart_hijacked() {
-                        log::warn!("[autostart] hijacked by: {}", hijacker);
-                        let _ = handle.emit("autostart-hijacked", hijacker);
                     }
                 }
             }
@@ -445,9 +431,58 @@ pub fn run() {
             cmd_start_recording,
             cmd_stop_recording,
             cmd_load_stats,
+            cmd_restore_autostart,
+            cmd_check_autostart,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[tauri::command]
+fn cmd_restore_autostart(app: tauri::AppHandle) -> Result<(), String> {
+    log::info!("[cmd] restore_autostart called");
+    let autolaunch = app.autolaunch();
+    autolaunch.enable().map_err(|e| {
+        log::error!("[autostart] failed to restore: {}", e);
+        format!("恢复自启动失败: {}", e)
+    })?;
+    log::info!("[autostart] restored by user request");
+    Ok(())
+}
+
+/// 手动检测自启动状态，返回 Ok(None) 表示正常，Ok(Some(source)) 表示被禁用
+#[tauri::command]
+fn cmd_check_autostart(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    log::info!("[cmd] check_autostart called");
+    let autolaunch = app.autolaunch();
+    let want_enabled = app.store("settings.json")
+        .ok()
+        .and_then(|store| store.get("app_settings"))
+        .and_then(|settings| settings.get("autoStart").and_then(|v| v.as_bool()))
+        .unwrap_or(false);
+    let currently_enabled = autolaunch.is_enabled().unwrap_or(false);
+    log::info!("[autostart] check: want_enabled={}, currently_enabled={}", want_enabled, currently_enabled);
+
+    if want_enabled && !currently_enabled {
+        #[cfg(target_os = "windows")]
+        {
+            let source = check_autostart_hijacked()
+                .unwrap_or_else(|| "未知来源".to_string());
+            log::warn!("[autostart] check: disabled by {}", source);
+            Ok(Some(source))
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            log::warn!("[autostart] check: disabled externally");
+            Ok(Some("未知来源".to_string()))
+        }
+    } else if !want_enabled {
+        log::info!("[autostart] check: user has not enabled autostart");
+        Ok(None)
+    } else {
+        log::info!("[autostart] check: autostart is normal");
+        Ok(None)
+    }
 }
 
 #[tauri::command]
@@ -666,6 +701,7 @@ fn start_recording_inner(
                                 "event": serde_json::to_value(&event).unwrap_or_default()
                             }));
                         }
+                        #[allow(unused_assignments)]
                         AsrEvent::FinalResult(text, duration_ms) => {
                             had_final = true;
                             // 累加统计到 stats.json

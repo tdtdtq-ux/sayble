@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useImperativeHandle, type Ref } from "react";
+import { useState, useEffect, useCallback, useImperativeHandle, useRef, type Ref } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { toast } from "sonner";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +19,7 @@ import { Separator } from "@/components/ui/separator";
 import { HotkeyRecorder } from "./HotkeyRecorder";
 import { AppIcon } from "./AppIcon";
 import { About } from "./About";
-import { Key, Keyboard, Settings2, Info, Plug, RefreshCw, Save, Check, Home, Type, Clock, Hash } from "lucide-react";
+import { Key, Keyboard, Settings2, Info, Plug, RefreshCw, Home, Type, Clock, Hash, Eye, EyeOff } from "lucide-react";
 
 function formatStatsDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
@@ -71,14 +72,15 @@ export interface SettingsHandle {
 
 interface SettingsProps {
   ref?: Ref<SettingsHandle>;
+  onAutostartWarning?: (source: string | null) => void;
 }
 
-export function Settings({ ref }: SettingsProps) {
+export function Settings({ ref, onAutostartWarning }: SettingsProps) {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [showAccessKey, setShowAccessKey] = useState(false);
   const [activeTab, setActiveTab] = useState("home");
 
   // 切到首页时刷新统计数据
@@ -153,20 +155,36 @@ export function Settings({ ref }: SettingsProps) {
     }
   };
 
-  const updateSetting = useCallback(<K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
-    setSettings((prev) => ({ ...prev, [key]: value }));
-    setSaved(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 组件卸载时清理防抖定时器
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
   }, []);
 
-  const handleSave = async () => {
-    try {
-      await invoke("cmd_save_settings", { settings });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch (e) {
-      console.error("Failed to save:", e);
-    }
-  };
+  // 自动保存：settings 变化后防抖 500ms 自动写入
+  const saveSettings = useCallback((newSettings: AppSettings) => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        await invoke("cmd_save_settings", { settings: newSettings });
+        toast.success("设置已保存");
+      } catch (e) {
+        console.error("Failed to save:", e);
+        toast.error("保存失败");
+      }
+    }, 500);
+  }, []);
+
+  const updateSetting = useCallback(<K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
+    setSettings((prev) => {
+      const next = { ...prev, [key]: value };
+      saveSettings(next);
+      return next;
+    });
+  }, [saveSettings]);
 
   const handleTestConnection = async () => {
     setTesting(true);
@@ -273,14 +291,23 @@ export function Settings({ ref }: SettingsProps) {
               </div>
               <div className="flex items-center gap-4">
                 <Label htmlFor="accessKey" className="shrink-0 w-20">Access Key</Label>
-                <Input
-                  id="accessKey"
-                  type="password"
-                  placeholder="输入 Access Key"
-                  value={settings.accessKey}
-                  onChange={(e) => updateSetting("accessKey", e.target.value)}
-                  className="flex-1"
-                />
+                <div className="relative flex-1">
+                  <Input
+                    id="accessKey"
+                    type={showAccessKey ? "text" : "password"}
+                    placeholder="输入 Access Key"
+                    value={settings.accessKey}
+                    onChange={(e) => updateSetting("accessKey", e.target.value)}
+                    className="pr-9"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAccessKey((v) => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showAccessKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
               </div>
               <Separator />
               <div className="flex items-center justify-between">
@@ -391,11 +418,27 @@ export function Settings({ ref }: SettingsProps) {
               </div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="autoStart">开机自启</Label>
-                <Switch
-                  id="autoStart"
-                  checked={settings.autoStart}
-                  onCheckedChange={(v) => updateSetting("autoStart", v)}
-                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const result = await invoke<string | null>("cmd_check_autostart");
+                        onAutostartWarning?.(result);
+                      } catch {
+                        onAutostartWarning?.(null);
+                      }
+                    }}
+                    className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
+                  >
+                    检测
+                  </button>
+                  <Switch
+                    id="autoStart"
+                    checked={settings.autoStart}
+                    onCheckedChange={(v) => updateSetting("autoStart", v)}
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -403,14 +446,6 @@ export function Settings({ ref }: SettingsProps) {
 
           {activeTab === "about" && <About />}
 
-        {activeTab !== "about" && activeTab !== "home" && (
-        <div className="mt-6 flex justify-end">
-          <Button onClick={handleSave}>
-            {saved ? <Check className="size-4 mr-1.5" /> : <Save className="size-4 mr-1.5" />}
-            {saved ? "已保存" : "保存设置"}
-          </Button>
-        </div>
-        )}
       </div>
     </div>
   );
