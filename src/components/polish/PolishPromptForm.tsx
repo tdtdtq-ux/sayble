@@ -36,10 +36,10 @@ export function PolishPromptForm({ initial, onSave, onCancel }: PolishPromptForm
         />
       </div>
       <div className="space-y-2">
-        <Label>Prompt 内容（使用 {"{{text}}"} 作为文本占位符）</Label>
+        <Label>Prompt 内容（识别文字会自动附加在末尾）</Label>
         <textarea
           className="flex min-h-[120px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-y"
-          placeholder={"请将以下文字润色...\n\n{{text}}"}
+          placeholder="请将以下口语化的文字转换为书面语，只输出润色后的文字。"
           value={content}
           onChange={(e) => setContent(e.target.value)}
         />

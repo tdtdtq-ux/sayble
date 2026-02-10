@@ -51,7 +51,7 @@ React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 - **polish/PolishProviderForm.tsx** — 供应商表单（OpenAI 兼容 API 配置）
 - **polish/PolishPromptManager.tsx** — Prompt 模板列表管理（Dialog 弹窗编辑）
 - **polish/PolishPromptForm.tsx** — Prompt 模板表单
-- **FloatingApp.tsx** — 浮窗入口，独立窗口，监听 ASR 事件（带 sessionId 过滤）和 floating-control 事件，管理文字输出
+- **FloatingApp.tsx** — 浮窗入口，独立窗口，监听 ASR 事件（带 sessionId 过滤）和 floating-control 事件，纯状态展示（不参与文字输出）
 - **FloatingWindow.tsx** — 浮窗 UI 组件（录音状态指示、实时识别文字、计时器）
 - **HotkeyRecorder.tsx** — 快捷键录制组件
 - **components/ui/** — shadcn/ui 组件库（button, card, dialog, input, select 等）
@@ -69,6 +69,7 @@ React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 - **前端不参与录音控制** — App.tsx 只负责设置界面，不监听热键事件
 - **ASR 事件携带 sessionId** — 前端用 `maxSessionRef` 比大小过滤旧 session 的迟到事件
 - **Disconnected 不暴露给前端** — 后端内部消化，fallback 为 FinalResult + Finished
+- **文字输出后端闭环** — 后端收到 FinalResult 后直接从 store 读取 outputMode/autoOutput 并执行输出，前端浮窗只负责展示状态
 - **异步 listener 注册使用 cancelled 标志** — 防止 React StrictMode 双重执行导致 listener 泄漏
 
 ### 后端 (src-tauri/src/)
@@ -90,7 +91,6 @@ Rust，按功能模块划分：
 - `cmd_list_audio_devices()` — 枚举音频输入设备
 - `cmd_start_recording(appId, accessKey, deviceName)` — 开始录音和 ASR 识别
 - `cmd_stop_recording()` — 停止录音
-- `cmd_output_text(text, mode)` — 通过剪贴板或键盘模拟输出文字
 - `cmd_test_asr_connection(appId, accessKey)` — 测试 ASR 连接
 - `cmd_test_polish_provider(baseUrl, apiKey)` — 测试润色供应商连接（GET /models）
 - `cmd_save_settings(settings)` / `cmd_load_settings()` — 设置持久化（全量读写，settings 为 `{ app_settings, polish_settings, ... }` 结构）

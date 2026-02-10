@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
@@ -15,11 +14,8 @@ export function FloatingApp() {
   const [errorMessage, setErrorMessage] = useState("");
   const [duration, setDuration] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const outputModeRef = useRef<"Clipboard" | "SimulateKeyboard">("Clipboard");
-  const autoOutputRef = useRef(true);
   const maxSessionRef = useRef(0);
   const cancelledSessionRef = useRef(0);
-  const outputDoneRef = useRef(false);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -59,18 +55,6 @@ export function FloatingApp() {
     setFinalText("");
     setErrorMessage("");
     setDuration(0);
-    outputDoneRef.current = false;
-  }, []);
-
-  const outputText = useCallback(async (text: string) => {
-    if (outputDoneRef.current) return;
-    if (!autoOutputRef.current || !text) return;
-    outputDoneRef.current = true;
-    try {
-      await invoke("cmd_output_text", { text, mode: outputModeRef.current });
-    } catch (e) {
-      logError("[output] Failed to output text: " + e);
-    }
   }, []);
 
   // 监听 ASR 事件（后端驱动，每个事件携带 sessionId）
@@ -131,7 +115,6 @@ export function FloatingApp() {
         setFinalText(data);
         setFloatingStatus("done");
         clearTimer();
-        outputText(data);
       } else if (type === "Finished") {
         info("[asr-event] session " + sessionId + " Finished");
         setFloatingStatus("idle");
@@ -162,7 +145,7 @@ export function FloatingApp() {
       unlisten?.();
       clearTimer();
     };
-  }, [clearTimer, showWindow, hideWindow, resetState, outputText]);
+  }, [clearTimer, showWindow, hideWindow, resetState]);
 
   // 监听主窗口发来的控制事件
   useEffect(() => {
@@ -171,19 +154,11 @@ export function FloatingApp() {
 
     listen<{
       action: string;
-      outputMode?: string;
-      autoOutput?: boolean;
     }>("floating-control", (event) => {
       if (cancelled) return;
-      const { action, outputMode, autoOutput } = event.payload;
-      info("[floating-control] received action: " + action + " outputMode: " + outputMode + " autoOutput: " + autoOutput);
+      const { action } = event.payload;
+      info("[floating-control] received action: " + action);
       if (action === "start") {
-        if (outputMode) {
-          outputModeRef.current = outputMode as "Clipboard" | "SimulateKeyboard";
-        }
-        if (autoOutput !== undefined) {
-          autoOutputRef.current = autoOutput;
-        }
         resetState();
         setFloatingStatus("recording");
         startTimer();

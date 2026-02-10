@@ -174,8 +174,43 @@ fn parse_hotkey_configs(toggle_label: &str, hold_label: &str) -> Vec<HotkeyConfi
     configs
 }
 
+/// 从持久化 store 中读取输出配置，直接执行文字输出
+fn output_text_from_store(app: &tauri::AppHandle, text: &str) {
+    let store = app.state::<AppStore>();
+    let settings = store.settings().get("app_settings");
+
+    let auto_output = settings.as_ref()
+        .and_then(|s| s.get("autoOutput"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    if !auto_output {
+        log::info!("[output] autoOutput is off, skipping");
+        return;
+    }
+
+    let output_mode_str = settings.as_ref()
+        .and_then(|s| s.get("outputMode"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("Clipboard");
+
+    let mode = match output_mode_str {
+        "SimulateKeyboard" => OutputMode::SimulateKeyboard,
+        _ => OutputMode::Clipboard,
+    };
+
+    log::info!("[output] output_text_from_store, mode={:?}, text_len={}", mode, text.len());
+    let result = match mode {
+        OutputMode::Clipboard => ClipboardOutput::paste(text),
+        OutputMode::SimulateKeyboard => SimulateOutput::type_text(text).map(|_| ()),
+    };
+    if let Err(e) = result {
+        log::error!("[output] output_text_from_store failed: {}", e);
+    }
+}
+
 /// 从持久化 store 中读取录音相关设置
-fn load_recording_settings_from_store(app: &tauri::AppHandle) -> Result<(AsrConfig, String, OutputMode, bool), String> {
+fn load_recording_settings_from_store(app: &tauri::AppHandle) -> Result<(AsrConfig, String), String> {
     let store = app.state::<AppStore>();
     let settings = store.settings().get("app_settings")
         .ok_or("No app_settings found in store")?;
@@ -183,12 +218,6 @@ fn load_recording_settings_from_store(app: &tauri::AppHandle) -> Result<(AsrConf
     let app_id = settings.get("appId").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let access_key = settings.get("accessKey").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let device_name = settings.get("microphoneDevice").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let output_mode_str = settings.get("outputMode").and_then(|v| v.as_str()).unwrap_or("Clipboard");
-    let output_mode = match output_mode_str {
-        "SimulateKeyboard" => OutputMode::SimulateKeyboard,
-        _ => OutputMode::Clipboard,
-    };
-    let auto_output = settings.get("autoOutput").and_then(|v| v.as_bool()).unwrap_or(true);
 
     if app_id.is_empty() || access_key.is_empty() {
         return Err("API 配置不完整，请先在设置中填写 App ID 和 Access Key".to_string());
@@ -200,7 +229,7 @@ fn load_recording_settings_from_store(app: &tauri::AppHandle) -> Result<(AsrConf
         ..Default::default()
     };
 
-    Ok((asr_config, device_name, output_mode, auto_output))
+    Ok((asr_config, device_name))
 }
 
 /// 从持久化 store 中读取快捷键标签，解析为 HotkeyConfig 列表
@@ -338,16 +367,10 @@ pub fn run() {
                             HotkeyEvent::StartRecording => {
                                 log::info!("[hotkey-forward] StartRecording: reading settings from store");
                                 match load_recording_settings_from_store(&hotkey_handle) {
-                                    Ok((asr_config, device_name, output_mode, auto_output)) => {
+                                    Ok((asr_config, device_name)) => {
                                         // 先通知浮窗开始（让浮窗立即显示）
-                                        let output_mode_str = match output_mode {
-                                            OutputMode::Clipboard => "Clipboard",
-                                            OutputMode::SimulateKeyboard => "SimulateKeyboard",
-                                        };
                                         let _ = hotkey_handle.emit("floating-control", serde_json::json!({
                                             "action": "start",
-                                            "outputMode": output_mode_str,
-                                            "autoOutput": auto_output,
                                         }));
 
                                         // 直接调用录音启动
@@ -427,7 +450,6 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             cmd_list_audio_devices,
-            cmd_output_text,
             cmd_save_settings,
             cmd_load_settings,
             cmd_test_asr_connection,
@@ -492,18 +514,6 @@ fn cmd_check_autostart(app: tauri::AppHandle) -> Result<Option<String>, String> 
 #[tauri::command]
 fn cmd_list_audio_devices() -> Result<Vec<audio::AudioDevice>, String> {
     audio::AudioCapture::list_devices()
-}
-
-#[tauri::command]
-fn cmd_output_text(text: String, mode: OutputMode) -> Result<(), String> {
-    log::info!("[cmd] output_text called, mode={:?}, text_len={}", mode, text.len());
-    match mode {
-        OutputMode::Clipboard => ClipboardOutput::paste(&text),
-        OutputMode::SimulateKeyboard => {
-            SimulateOutput::type_text(&text)?;
-            Ok(())
-        }
-    }
 }
 
 #[tauri::command]
@@ -751,7 +761,9 @@ fn start_recording_inner(
                             // 累加统计到 stats.json
                             log::info!("[asr-forward] FinalResult received, text_len={}, duration_ms={:?}", text.len(), duration_ms);
                             app_clone.state::<AppStore>().accumulate_stats(text.chars().count(), *duration_ms);
-                            // emit 给前端（保持原格式）
+                            // 后端直接打印（焦点还在目标窗口）
+                            output_text_from_store(&app_clone, text);
+                            // emit 给前端（浮窗显示）
                             let _ = app_clone.emit("asr-event", serde_json::json!({
                                 "sessionId": session_id,
                                 "event": {"FinalResult": text}
@@ -785,6 +797,8 @@ fn start_recording_inner(
                                 if !last_partial_text.is_empty() {
                                     // 累加统计（fallback 场景，时长为 0）
                                     app_clone.state::<AppStore>().accumulate_stats(last_partial_text.chars().count(), None);
+                                    // 后端直接打印
+                                    output_text_from_store(&app_clone, &last_partial_text);
                                     let _ = app_clone.emit("asr-event", serde_json::json!({
                                         "sessionId": session_id,
                                         "event": {"FinalResult": last_partial_text}
