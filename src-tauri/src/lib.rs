@@ -524,12 +524,21 @@ fn cmd_save_settings(
     let store = app
         .store("settings.json")
         .map_err(|e| format!("Failed to open store: {}", e))?;
-    store.set("app_settings", settings.clone());
+
+    // 按 key 写入 store
+    if let Some(obj) = settings.as_object() {
+        for (k, v) in obj {
+            store.set(k, v.clone());
+        }
+    }
     store.save().map_err(|e| format!("Failed to save store: {}", e))?;
 
+    // 从 app_settings 提取副作用字段
+    let app_settings = settings.get("app_settings").unwrap_or(&serde_json::Value::Null);
+
     // 同步快捷键配置到 HotkeyManager
-    let toggle = settings.get("toggleHotkey").and_then(|v| v.as_str()).unwrap_or("");
-    let hold = settings.get("holdHotkey").and_then(|v| v.as_str()).unwrap_or("");
+    let toggle = app_settings.get("toggleHotkey").and_then(|v| v.as_str()).unwrap_or("");
+    let hold = app_settings.get("holdHotkey").and_then(|v| v.as_str()).unwrap_or("");
     let configs = parse_hotkey_configs(toggle, hold);
     if !configs.is_empty() {
         if let Ok(mgr) = hotkey_mgr.lock() {
@@ -539,7 +548,7 @@ fn cmd_save_settings(
     }
 
     // 同步自启动状态
-    let auto_start = settings.get("autoStart").and_then(|v| v.as_bool()).unwrap_or(false);
+    let auto_start = app_settings.get("autoStart").and_then(|v| v.as_bool()).unwrap_or(false);
     let autolaunch = app.autolaunch();
     if auto_start {
         if let Err(e) = autolaunch.enable() {
@@ -562,11 +571,15 @@ fn cmd_save_settings(
 }
 
 #[tauri::command]
-fn cmd_load_settings(app: tauri::AppHandle) -> Result<Option<serde_json::Value>, String> {
+fn cmd_load_settings(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let store = app
         .store("settings.json")
         .map_err(|e| format!("Failed to open store: {}", e))?;
-    Ok(store.get("app_settings"))
+    let mut map = serde_json::Map::new();
+    for (k, v) in store.entries() {
+        map.insert(k, v);
+    }
+    Ok(serde_json::Value::Object(map))
 }
 
 /// 内部录音启动逻辑，可从任意线程调用（非 async）

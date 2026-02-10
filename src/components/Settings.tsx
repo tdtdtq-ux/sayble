@@ -16,7 +16,9 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { HotkeyRecorder } from "./HotkeyRecorder";
 import { About } from "./About";
-import { Mic, Settings2, Info, Plug, RefreshCw, Eye, EyeOff, ArrowLeft } from "lucide-react";
+import { Mic, Settings2, Info, Plug, RefreshCw, Eye, EyeOff, ArrowLeft, Sparkles } from "lucide-react";
+import { PolishSettings } from "./polish/PolishSettings";
+import { defaultPolishSettings, type PolishSettings as PolishSettingsType } from "@/types/polish";
 
 interface AudioDevice {
   name: string;
@@ -61,6 +63,7 @@ interface SettingsProps {
 
 const menuItems = [
   { key: "voice", label: "语音", icon: Mic },
+  { key: "polish", label: "润色", icon: Sparkles },
   { key: "general", label: "通用", icon: Settings2 },
   { key: "about", label: "关于", icon: Info },
 ] as const;
@@ -69,6 +72,7 @@ type TabKey = (typeof menuItems)[number]["key"];
 
 export function Settings({ ref, onBack, onAutostartWarning }: SettingsProps) {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+  const [polishSettings, setPolishSettings] = useState<PolishSettingsType>(defaultPolishSettings);
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
@@ -86,9 +90,14 @@ export function Settings({ ref, onBack, onAutostartWarning }: SettingsProps) {
 
   const loadSettings = async () => {
     try {
-      const result = await invoke<AppSettings | null>("cmd_load_settings");
+      const result = await invoke<Record<string, unknown>>("cmd_load_settings");
       if (result) {
-        setSettings((prev) => ({ ...prev, ...result }));
+        if (result.app_settings) {
+          setSettings((prev) => ({ ...prev, ...(result.app_settings as Partial<AppSettings>) }));
+        }
+        if (result.polish_settings) {
+          setPolishSettings((prev) => ({ ...prev, ...(result.polish_settings as Partial<PolishSettingsType>) }));
+        }
       }
     } catch (e) {
       console.error("Failed to load settings:", e);
@@ -105,6 +114,10 @@ export function Settings({ ref, onBack, onAutostartWarning }: SettingsProps) {
   };
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const polishSettingsRef = useRef(polishSettings);
+  polishSettingsRef.current = polishSettings;
 
   useEffect(() => {
     return () => {
@@ -112,11 +125,16 @@ export function Settings({ ref, onBack, onAutostartWarning }: SettingsProps) {
     };
   }, []);
 
-  const saveSettings = useCallback((newSettings: AppSettings) => {
+  const debouncedSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
       try {
-        await invoke("cmd_save_settings", { settings: newSettings });
+        await invoke("cmd_save_settings", {
+          settings: {
+            app_settings: settingsRef.current,
+            polish_settings: polishSettingsRef.current,
+          },
+        });
         toast.success("设置已保存");
       } catch (e) {
         console.error("Failed to save:", e);
@@ -128,10 +146,17 @@ export function Settings({ ref, onBack, onAutostartWarning }: SettingsProps) {
   const updateSetting = useCallback(<K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     setSettings((prev) => {
       const next = { ...prev, [key]: value };
-      saveSettings(next);
+      settingsRef.current = next;
+      debouncedSave();
       return next;
     });
-  }, [saveSettings]);
+  }, [debouncedSave]);
+
+  const updatePolishSettings = useCallback((next: PolishSettingsType) => {
+    setPolishSettings(next);
+    polishSettingsRef.current = next;
+    debouncedSave();
+  }, [debouncedSave]);
 
   const handleTestConnection = async () => {
     setTesting(true);
@@ -265,6 +290,8 @@ export function Settings({ ref, onBack, onAutostartWarning }: SettingsProps) {
               </CardContent>
             </Card>
           )}
+
+          {activeTab === "polish" && <PolishSettings settings={polishSettings} onChange={updatePolishSettings} />}
 
           {activeTab === "general" && (
             <div className="space-y-4">

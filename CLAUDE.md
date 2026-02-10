@@ -47,7 +47,7 @@ React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 
 路径别名：`@/*` → `./src/*`
 
-无全局状态管理库，使用 React hooks + Tauri plugin-store 持久化。跨窗口通信使用 Tauri 事件系统。
+无全局状态管理库，使用 React hooks 管理状态。设置持久化通过后端 IPC（`cmd_load_settings` / `cmd_save_settings`）全量读写 `settings.json`，前端不直接操作 store。跨窗口通信使用 Tauri 事件系统。
 
 #### 录音状态管理
 
@@ -80,7 +80,7 @@ Rust，按功能模块划分：
 - `cmd_stop_recording()` — 停止录音
 - `cmd_output_text(text, mode)` — 通过剪贴板或键盘模拟输出文字
 - `cmd_test_asr_connection(appId, accessKey)` — 测试 ASR 连接
-- `cmd_save_settings(app, settings)` / `cmd_load_settings(app)` — 设置持久化
+- `cmd_save_settings(settings)` / `cmd_load_settings()` — 设置持久化（全量读写，settings 为 `{ app_settings, polish_settings, ... }` 结构）
 
 ### 关键依赖
 
