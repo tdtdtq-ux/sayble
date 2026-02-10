@@ -321,6 +321,7 @@ fn get_polish_config(app: &tauri::AppHandle) -> Option<polish::PolishConfig> {
     let base_url = provider.get("baseUrl")?.as_str()?.to_string();
     let api_key = provider.get("apiKey")?.as_str()?.to_string();
     let model = provider.get("model")?.as_str()?.to_string();
+    let temperature = provider.get("temperature").and_then(|v| v.as_f64()).unwrap_or(0.7);
     let prompt_content = prompt.get("content")?.as_str()?.to_string();
 
     if base_url.is_empty() || api_key.is_empty() || model.is_empty() {
@@ -328,12 +329,13 @@ fn get_polish_config(app: &tauri::AppHandle) -> Option<polish::PolishConfig> {
         return None;
     }
 
-    log::info!("[polish] config loaded: model={}, prompt_id={}", model, selected_prompt_id);
+    log::info!("[polish] config loaded: model={}, temperature={}, prompt_id={}", model, temperature, selected_prompt_id);
     Some(polish::PolishConfig {
         base_url,
         api_key,
         model,
         prompt: prompt_content,
+        temperature,
     })
 }
 

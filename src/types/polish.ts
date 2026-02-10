@@ -4,6 +4,7 @@ export interface PolishProvider {
   baseUrl: string;
   apiKey: string;
   model: string;
+  temperature: number;
 }
 
 export interface PolishPrompt {

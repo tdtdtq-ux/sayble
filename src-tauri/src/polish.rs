@@ -5,6 +5,7 @@ pub struct PolishConfig {
     pub api_key: String,
     pub model: String,
     pub prompt: String,
+    pub temperature: f64,
 }
 
 #[derive(Deserialize)]
@@ -34,6 +35,7 @@ pub async fn polish_text(config: &PolishConfig, text: &str) -> Result<String, St
             { "role": "system", "content": config.prompt },
             { "role": "user", "content": text },
         ],
+        "temperature": config.temperature,
     });
 
     log::info!("[polish] POST {}, model={}, text_len={}", url, config.model, text.len());

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import { Eye, EyeOff } from "lucide-react";
 import type { PolishProvider } from "@/types/polish";
 
@@ -16,6 +17,7 @@ export function PolishProviderForm({ initial, onSave, onCancel }: PolishProvider
   const [baseUrl, setBaseUrl] = useState(initial?.baseUrl ?? "");
   const [apiKey, setApiKey] = useState(initial?.apiKey ?? "");
   const [model, setModel] = useState(initial?.model ?? "");
+  const [temperature, setTemperature] = useState(initial?.temperature ?? 0.7);
   const [showApiKey, setShowApiKey] = useState(false);
 
   const canSave = name.trim() && baseUrl.trim() && apiKey.trim() && model.trim();
@@ -27,6 +29,7 @@ export function PolishProviderForm({ initial, onSave, onCancel }: PolishProvider
       baseUrl: baseUrl.trim(),
       apiKey: apiKey.trim(),
       model: model.trim(),
+      temperature,
     });
   };
 
@@ -77,6 +80,20 @@ export function PolishProviderForm({ initial, onSave, onCancel }: PolishProvider
           onChange={(e) => setModel(e.target.value)}
           className="flex-1"
         />
+      </div>
+      <div className="flex items-center gap-4">
+        <Label className="shrink-0 w-20">Temperature</Label>
+        <div className="flex flex-1 items-center gap-3">
+          <Slider
+            min={0}
+            max={2}
+            step={0.1}
+            value={[temperature]}
+            onValueChange={([v]) => setTemperature(v)}
+            className="flex-1"
+          />
+          <span className="w-8 text-sm text-muted-foreground text-right">{temperature.toFixed(1)}</span>
+        </div>
       </div>
       <div className="flex justify-end gap-2 pt-1">
         <Button variant="ghost" size="sm" onClick={onCancel}>

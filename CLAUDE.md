@@ -48,7 +48,7 @@ React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 - **polish/PolishSettings.tsx** — 润色设置 tab（供应商、Prompt、开关）
 - **polish/PolishHome.tsx** — 润色首页（开关、供应商/Prompt 选择）
 - **polish/PolishProviderManager.tsx** — 供应商列表管理（Dialog 弹窗编辑，测试连接，复制供应商，选中标记）
-- **polish/PolishProviderForm.tsx** — 供应商表单（OpenAI 兼容 API 配置）
+- **polish/PolishProviderForm.tsx** — 供应商表单（OpenAI 兼容 API 配置，含 temperature 滑块）
 - **polish/PolishPromptManager.tsx** — Prompt 模板列表管理（Dialog 弹窗编辑）
 - **polish/PolishPromptForm.tsx** — Prompt 模板表单
 - **FloatingApp.tsx** — 浮窗入口，独立窗口，监听 ASR 事件（带 sessionId 过滤）和 floating-control 事件，纯状态展示（不参与文字输出）
@@ -144,3 +144,4 @@ Vitest + jsdom 环境 + @testing-library/react。测试文件放在对应目录�
 ## Work Rules
 
 - 当用户提供了文档链接或文档内容时，严格按照文档来做，不要自行搜索替代方案。如果文档链接无法访问，必须立即告知用户，而不是自己去网上搜索。
+- 前端 UI 开发时，凡是 shadcn/ui 组件库中有对应组件的，一律使用 shadcn/ui 组件，不要使用原生 HTML 元素。
