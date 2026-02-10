@@ -73,6 +73,7 @@ Rust，按功能模块划分：
 | `audio/` | 麦克风音频采集（cpal） |
 | `hotkey/` | 全局热键 — `win_hook.rs` Windows 底层键盘钩子 |
 | `input/` | 文字输出 — `simulate.rs` 键盘模拟（enigo），`clipboard.rs` 剪贴板（arboard） |
+| `store.rs` | 数据持久化 — 自封装 JsonStore，统一管理 `~/.sayble/` 下的 settings/stats |
 | `tray/` | 系统托盘图标与菜单 |
 | `config.rs` | 配置类型定义（如 OutputMode 枚举） |
 
@@ -100,13 +101,13 @@ Vitest + jsdom 环境 + @testing-library/react。测试文件放在对应目录�
 
 当前主要面向 Windows 平台（hotkey 模块使用 Windows API 键盘钩子）。主窗口使用 Overlay 标题栏模式（`titleBarStyle: "Overlay"`），由系统提供窗口控制按钮，关闭按钮拦截为隐藏到托盘。浮窗为独立窗口（`decorations: false, alwaysOnTop: true`），不显示在任务栏。通过 `build.manifest` 声明 `PerMonitorV2` DPI 感知，确保多屏不同缩放比例下 UI 清晰。
 
-## Data Paths (Windows)
+## Data Paths
 
 | 路径 | 说明 |
 |------|------|
-| `%APPDATA%/com.sayble.app/settings.json` | 用户设置持久化（tauri-plugin-store） |
-| `%APPDATA%/com.sayble.app/stats.json` | 使用统计持久化（tauri-plugin-store） |
-| `%LOCALAPPDATA%/com.sayble.app/logs/sayble.log` | 应用日志（tauri-plugin-log，5MB 轮转，保留旧文件） |
+| `~/.sayble/settings.json` | 用户设置持久化（自封装 JsonStore） |
+| `~/.sayble/stats.json` | 使用统计持久化（自封装 JsonStore） |
+| `~/.sayble/logs/sayble.log` | 应用日志（tauri-plugin-log，5MB 轮转） |
 
 ### 日志 Tag 约定
 
@@ -123,6 +124,7 @@ Vitest + jsdom 环境 + @testing-library/react。测试文件放在对应目录�
 | `[asr]` | asr/ | ASR WebSocket 通信 |
 | `[asr-forward]` | lib.rs | ASR 事件转发到前端 |
 | `[output]` | input/ | 文字输出（剪贴板粘贴 / 键盘模拟） |
+| `[store]` | store.rs | 数据持久化（JsonStore 读写） |
 | `[tray]` | tray/ | 系统托盘 |
 | `[autostart]` | lib.rs | 开机自启动 |
 

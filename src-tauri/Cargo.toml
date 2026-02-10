@@ -16,7 +16,6 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-global-shortcut = "2"
-tauri-plugin-store = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-autostart = "2"
 serde = { version = "1", features = ["derive"] }
@@ -29,6 +28,7 @@ enigo = "0.2"
 arboard = "3"
 uuid = { version = "1", features = ["v4"] }
 log = "0.4"
+dirs = "6"
 tauri-plugin-log = "2"
 byteorder = "1"
 url = "2"

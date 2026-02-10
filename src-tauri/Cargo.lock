@@ -3864,6 +3864,7 @@ dependencies = [
  "arboard",
  "byteorder",
  "cpal",
+ "dirs 6.0.0",
  "dotenvy",
  "enigo",
  "futures-util",
@@ -3879,7 +3880,6 @@ dependencies = [
  "tauri-plugin-log",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
- "tauri-plugin-store",
  "tempfile",
  "tokio",
  "tokio-tungstenite",
@@ -4831,22 +4831,6 @@ dependencies = [
  "tracing",
  "windows-sys 0.60.2",
  "zbus",
-]
-
-[[package]]
-name = "tauri-plugin-store"
-version = "2.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ca1a8ff83c269b115e98726ffc13f9e548a10161544a92ad121d6d0a96e16ea"
-dependencies = [
- "dunce",
- "serde",
- "serde_json",
- "tauri",
- "tauri-plugin",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
 ]
 
 [[package]]

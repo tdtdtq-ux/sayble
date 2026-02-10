@@ -3,6 +3,7 @@ pub mod audio;
 pub mod config;
 pub mod hotkey;
 pub mod input;
+pub mod store;
 pub mod tray;
 
 use asr::volcengine::{AsrEvent, VolcEngineAsr};
@@ -10,11 +11,11 @@ use audio::AudioCapture;
 use config::{AppConfig, AsrConfig, HotkeyBinding, HotkeyConfig, HotkeyMode, OutputMode};
 use hotkey::HotkeyManager;
 use input::{ClipboardOutput, SimulateOutput};
+use store::AppStore;
 use tray::TrayManager;
 
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager};
-use tauri_plugin_store::StoreExt;
 use tauri_plugin_autostart::ManagerExt;
 
 /// 检查自启动注册表项是否被第三方软件（如 QQ、360 等）禁用
@@ -175,9 +176,8 @@ fn parse_hotkey_configs(toggle_label: &str, hold_label: &str) -> Vec<HotkeyConfi
 
 /// 从持久化 store 中读取录音相关设置
 fn load_recording_settings_from_store(app: &tauri::AppHandle) -> Result<(AsrConfig, String, OutputMode, bool), String> {
-    let store = app.store("settings.json")
-        .map_err(|e| format!("Failed to open store: {}", e))?;
-    let settings = store.get("app_settings")
+    let store = app.state::<AppStore>();
+    let settings = store.settings().get("app_settings")
         .ok_or("No app_settings found in store")?;
 
     let app_id = settings.get("appId").and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -205,8 +205,8 @@ fn load_recording_settings_from_store(app: &tauri::AppHandle) -> Result<(AsrConf
 
 /// 从持久化 store 中读取快捷键标签，解析为 HotkeyConfig 列表
 fn load_hotkey_configs_from_store(app: &tauri::AppHandle) -> Option<Vec<HotkeyConfig>> {
-    let store = app.store("settings.json").ok()?;
-    let settings = store.get("app_settings")?;
+    let store = app.state::<AppStore>();
+    let settings = store.settings().get("app_settings")?;
     let toggle = settings.get("toggleHotkey")?.as_str()?;
     let hold = settings.get("holdHotkey")?.as_str()?;
     let configs = parse_hotkey_configs(toggle, hold);
@@ -224,7 +224,8 @@ pub fn run() {
             tauri_plugin_log::Builder::new()
                 .targets([
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
-                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
+                        path: store::base_dir().join("logs"),
                         file_name: Some("sayble".into()),
                     }),
                 ])
@@ -245,7 +246,6 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
@@ -254,13 +254,16 @@ pub fn run() {
             let handle = app.handle().clone();
             TrayManager::setup(&handle)?;
 
+            // 初始化 AppStore 并注册为 managed state
+            let app_store = AppStore::init();
+            app.manage(app_store);
+
             // 同步自启动状态：用户未开启但系统中启用了，则关闭
             // 用户开启但被第三方禁用的情况，由前端主动调用 cmd_check_autostart 检测并提示
             {
                 let autolaunch = app.autolaunch();
-                let want_enabled = app.store("settings.json")
-                    .ok()
-                    .and_then(|store| store.get("app_settings"))
+                let want_enabled = app.state::<AppStore>()
+                    .settings().get("app_settings")
                     .and_then(|settings| settings.get("autoStart").and_then(|v| v.as_bool()))
                     .unwrap_or(false);
                 let currently_enabled = autolaunch.is_enabled().unwrap_or(false);
@@ -455,9 +458,8 @@ fn cmd_restore_autostart(app: tauri::AppHandle) -> Result<(), String> {
 fn cmd_check_autostart(app: tauri::AppHandle) -> Result<Option<String>, String> {
     log::info!("[cmd] check_autostart called");
     let autolaunch = app.autolaunch();
-    let want_enabled = app.store("settings.json")
-        .ok()
-        .and_then(|store| store.get("app_settings"))
+    let want_enabled = app.state::<AppStore>()
+        .settings().get("app_settings")
         .and_then(|settings| settings.get("autoStart").and_then(|v| v.as_bool()))
         .unwrap_or(false);
     let currently_enabled = autolaunch.is_enabled().unwrap_or(false);
@@ -521,17 +523,16 @@ fn cmd_save_settings(
     hotkey_mgr: tauri::State<'_, Arc<Mutex<HotkeyManager>>>,
     settings: serde_json::Value,
 ) -> Result<(), String> {
-    let store = app
-        .store("settings.json")
-        .map_err(|e| format!("Failed to open store: {}", e))?;
+    let store = app.state::<AppStore>();
+    let settings_store = store.settings();
 
     // 按 key 写入 store
     if let Some(obj) = settings.as_object() {
         for (k, v) in obj {
-            store.set(k, v.clone());
+            settings_store.set(k, v.clone());
         }
     }
-    store.save().map_err(|e| format!("Failed to save store: {}", e))?;
+    settings_store.save().map_err(|e| format!("Failed to save store: {}", e))?;
 
     // 从 app_settings 提取副作用字段
     let app_settings = settings.get("app_settings").unwrap_or(&serde_json::Value::Null);
@@ -572,11 +573,9 @@ fn cmd_save_settings(
 
 #[tauri::command]
 fn cmd_load_settings(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let store = app
-        .store("settings.json")
-        .map_err(|e| format!("Failed to open store: {}", e))?;
+    let store = app.state::<AppStore>();
     let mut map = serde_json::Map::new();
-    for (k, v) in store.entries() {
+    for (k, v) in store.settings().entries() {
         map.insert(k, v);
     }
     Ok(serde_json::Value::Object(map))
@@ -719,26 +718,7 @@ fn start_recording_inner(
                             had_final = true;
                             // 累加统计到 stats.json
                             log::info!("[asr-forward] FinalResult received, text_len={}, duration_ms={:?}", text.len(), duration_ms);
-                            match app_clone.store("stats.json") {
-                                Ok(store) => {
-                                    let prev_dur: i64 = store.get("total_duration_ms")
-                                        .and_then(|v| v.as_i64()).unwrap_or(0);
-                                    let prev_chars: i64 = store.get("total_chars")
-                                        .and_then(|v| v.as_i64()).unwrap_or(0);
-                                    let count: i64 = store.get("total_count")
-                                        .and_then(|v| v.as_i64()).unwrap_or(0);
-                                    store.set("total_duration_ms", serde_json::json!(prev_dur + duration_ms.unwrap_or(0)));
-                                    store.set("total_chars", serde_json::json!(prev_chars + text.chars().count() as i64));
-                                    store.set("total_count", serde_json::json!(count + 1));
-                                    log::info!("[asr-forward] stats updated: dur={}, chars={}, count={}", prev_dur + duration_ms.unwrap_or(0), prev_chars + text.chars().count() as i64, count + 1);
-                                    if let Err(e) = store.save() {
-                                        log::error!("[asr-forward] stats save failed: {}", e);
-                                    }
-                                }
-                                Err(e) => {
-                                    log::error!("[asr-forward] failed to open stats store: {}", e);
-                                }
-                            }
+                            app_clone.state::<AppStore>().accumulate_stats(text.chars().count(), *duration_ms);
                             // emit 给前端（保持原格式）
                             let _ = app_clone.emit("asr-event", serde_json::json!({
                                 "sessionId": session_id,
@@ -772,15 +752,7 @@ fn start_recording_inner(
                                 // 没有 FinalResult，用最后的 PartialResult 作为 fallback
                                 if !last_partial_text.is_empty() {
                                     // 累加统计（fallback 场景，时长为 0）
-                                    if let Ok(store) = app_clone.store("stats.json") {
-                                        let prev_chars: i64 = store.get("total_chars")
-                                            .and_then(|v| v.as_i64()).unwrap_or(0);
-                                        let count: i64 = store.get("total_count")
-                                            .and_then(|v| v.as_i64()).unwrap_or(0);
-                                        store.set("total_chars", serde_json::json!(prev_chars + last_partial_text.chars().count() as i64));
-                                        store.set("total_count", serde_json::json!(count + 1));
-                                        let _ = store.save();
-                                    }
+                                    app_clone.state::<AppStore>().accumulate_stats(last_partial_text.chars().count(), None);
                                     let _ = app_clone.emit("asr-event", serde_json::json!({
                                         "sessionId": session_id,
                                         "event": {"FinalResult": last_partial_text}
@@ -870,11 +842,11 @@ fn cmd_stop_recording(
 
 #[tauri::command]
 fn cmd_load_stats(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let store = app.store("stats.json")
-        .map_err(|e| format!("Failed to open stats store: {}", e))?;
+    let store = app.state::<AppStore>();
+    let stats = store.stats();
     Ok(serde_json::json!({
-        "totalDurationMs": store.get("total_duration_ms").and_then(|v| v.as_i64()).unwrap_or(0),
-        "totalChars": store.get("total_chars").and_then(|v| v.as_i64()).unwrap_or(0),
-        "totalCount": store.get("total_count").and_then(|v| v.as_i64()).unwrap_or(0),
+        "totalDurationMs": stats.get("total_duration_ms").and_then(|v| v.as_i64()).unwrap_or(0),
+        "totalChars": stats.get("total_chars").and_then(|v| v.as_i64()).unwrap_or(0),
+        "totalCount": stats.get("total_count").and_then(|v| v.as_i64()).unwrap_or(0),
     }))
 }
