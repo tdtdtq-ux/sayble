@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AppIcon } from "./AppIcon";
-import { Settings2, Hash, Type, Clock } from "lucide-react";
+import { Settings, Hash, Type, Clock } from "lucide-react";
 
 function formatStatsDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
@@ -109,7 +109,7 @@ export function HomePage({ onOpenSettings }: HomePageProps) {
         onClick={onOpenSettings}
         className="fixed left-4 bottom-4 size-10 rounded-full bg-muted/80 hover:bg-muted flex items-center justify-center transition-colors"
       >
-        <Settings2 className="size-5 text-muted-foreground" />
+        <Settings className="size-5 text-muted-foreground" />
       </button>
     </div>
   );
