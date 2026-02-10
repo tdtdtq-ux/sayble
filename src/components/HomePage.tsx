@@ -5,8 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { AppIcon } from "./AppIcon";
-import { Settings, Hash, Type, Clock, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Hash, Type, Clock, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import type { HistoryRecord } from "@/types/history";
 
 function formatStatsDuration(ms: number): string {
@@ -34,11 +33,7 @@ function formatTimestamp(ts: string, full = false): string {
 
 const PAGE_SIZE = 20;
 
-interface HomePageProps {
-  onOpenSettings: () => void;
-}
-
-export function HomePage({ onOpenSettings }: HomePageProps) {
+export function HomePage() {
   const [stats, setStats] = useState<{ totalDurationMs: number; totalChars: number; totalCount: number } | null>(null);
   const [history, setHistory] = useState<HistoryRecord[]>([]);
   const [page, setPage] = useState(0);
@@ -110,31 +105,8 @@ export function HomePage({ onOpenSettings }: HomePageProps) {
   const pagedHistory = history.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   return (
-    <div className="h-full flex">
-      {/* 左侧菜单 */}
-      <div className="w-56 shrink-0 border-r flex flex-col">
-        <div className="px-4 pt-6 pb-4">
-          <h1 className="text-lg font-bold tracking-tight flex items-center gap-2">
-            <AppIcon className="size-5" />
-            Sayble
-          </h1>
-        </div>
-        {/* 菜单项区域（暂空） */}
-        <div className="flex-1" />
-        <div className="px-4 pb-4">
-          <button
-            onClick={onOpenSettings}
-            className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
-          >
-            <Settings className="size-4 shrink-0" />
-            设置
-          </button>
-        </div>
-      </div>
-
-      {/* 右侧内容区 */}
-      <div className="flex-1 min-w-0 flex flex-col">
-        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-6 space-y-4">
+    <>
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-6 space-y-4">
         <Card>
           <CardHeader>
             <CardTitle>使用统计</CardTitle>
@@ -233,7 +205,6 @@ export function HomePage({ onOpenSettings }: HomePageProps) {
             )}
           </CardContent>
         </Card>
-        </div>
       </div>
 
       {/* 详情弹窗 */}
@@ -289,6 +260,6 @@ export function HomePage({ onOpenSettings }: HomePageProps) {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

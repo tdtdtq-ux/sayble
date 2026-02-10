@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { HomePage } from "@/components/HomePage";
+import { Dashboard } from "@/components/Dashboard";
 import { Settings, type SettingsHandle } from "@/components/Settings";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -117,7 +117,7 @@ function App() {
       )}
       <div className="flex-1 min-h-0">
         {page === "home" ? (
-          <HomePage onOpenSettings={() => setPage("settings")} />
+          <Dashboard onOpenSettings={() => setPage("settings")} />
         ) : (
           <Settings
             ref={settingsRef}
