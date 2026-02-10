@@ -3,6 +3,8 @@ import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { AppIcon } from "./AppIcon";
 
+declare const __BUILD_TIME__: string;
+
 const GITHUB_URL = "https://github.com/tdtdtq-ux/sayble";
 
 const badges = ["Tauri v2", "Rust", "React 19", "MIT"];
@@ -28,11 +30,16 @@ export function About() {
         </p>
       </div>
 
-      {version && (
+      <div className="flex flex-wrap justify-center items-center gap-2">
+        {version && (
+          <span className="inline-block rounded-full border px-3 py-0.5 text-xs text-muted-foreground">
+            v{version}
+          </span>
+        )}
         <span className="inline-block rounded-full border px-3 py-0.5 text-xs text-muted-foreground">
-          v{version}
+          Build {__BUILD_TIME__.slice(0, 16).replace("T", " ")} UTC
         </span>
-      )}
+      </div>
 
       <div className="flex flex-wrap justify-center gap-2">
         {badges.map((badge) => (
