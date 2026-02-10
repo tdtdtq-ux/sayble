@@ -118,9 +118,9 @@ export function PersonaPage({
       </div>
 
       {/* 下方左右分栏 */}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 px-6 gap-4">
         {/* 左侧列表 */}
-        <div className="w-48 shrink-0 overflow-y-auto custom-scrollbar space-y-1.5 pb-4 pl-4 pr-2">
+        <div className="w-48 shrink-0 overflow-y-auto custom-scrollbar space-y-1.5 pb-4">
           {prompts.map((prompt) => (
             <button
               key={prompt.id}
