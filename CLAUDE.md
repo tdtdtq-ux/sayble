@@ -53,6 +53,7 @@ React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 - **polish/PolishPromptForm.tsx** — Prompt 模板表单
 - **FloatingApp.tsx** — 浮窗入口，独立窗口，监听 ASR 事件（带 sessionId 过滤）和 floating-control 事件，纯状态展示（不参与文字输出）
 - **FloatingWindow.tsx** — 浮窗 UI 组件（录音状态指示、实时识别文字、计时器）
+- **HomePage.tsx** — 主窗口首页（使用统计卡片、识别历史列表、详情弹窗、分页、清空）
 - **HotkeyRecorder.tsx** — 快捷键录制组件
 - **components/ui/** — shadcn/ui 组件库（button, card, dialog, input, select 等）
 
@@ -82,7 +83,7 @@ Rust，按功能模块划分：
 | `audio/` | 麦克风音频采集（cpal） |
 | `hotkey/` | 全局热键 — `win_hook.rs` Windows 底层键盘钩子 |
 | `input/` | 文字输出 — `simulate.rs` 键盘模拟（enigo），`clipboard.rs` 剪贴板（arboard） |
-| `store.rs` | 数据持久化 — 自封装 JsonStore，统一管理 `~/.sayble/` 下的 settings/stats |
+| `store.rs` | 数据持久化 — 自封装 JsonStore，统一管理 `~/.sayble/` 下的 settings/stats/history |
 | `tray/` | 系统托盘图标与菜单 |
 | `config.rs` | 配置类型定义（如 OutputMode 枚举） |
 | `polish.rs` | LLM 润色 — 调用 OpenAI 兼容 API（POST /chat/completions）对 ASR 文字润色 |
@@ -96,6 +97,8 @@ Rust，按功能模块划分：
 - `cmd_test_polish_provider(baseUrl, apiKey)` — 测试润色供应商连接（GET /models）
 - `cmd_save_settings(settings)` / `cmd_load_settings()` — 设置持久化（全量读写，settings 为 `{ app_settings, polish_settings, ... }` 结构）
 - `cmd_get_data_dir()` — 返回数据目录路径（settings、logs）
+- `cmd_load_history()` — 加载识别历史记录（倒序，最新在前）
+- `cmd_clear_history()` — 清空识别历史记录
 
 ### 关键依赖
 
@@ -119,6 +122,7 @@ Vitest + jsdom 环境 + @testing-library/react。测试文件放在对应目录�
 |------|------|
 | `~/.sayble/settings.json` | 用户设置持久化（自封装 JsonStore） |
 | `~/.sayble/stats.json` | 使用统计持久化（自封装 JsonStore） |
+| `~/.sayble/history.json` | 识别历史记录持久化（自封装 JsonStore，最多 200 条） |
 | `~/.sayble/logs/sayble.log` | 应用日志（tauri-plugin-log，5MB 轮转） |
 
 ### 日志 Tag 约定

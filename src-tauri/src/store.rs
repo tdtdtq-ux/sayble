@@ -67,7 +67,10 @@ pub fn base_dir() -> PathBuf {
 pub struct AppStore {
     settings: JsonStore,
     stats: JsonStore,
+    history: JsonStore,
 }
+
+const MAX_HISTORY_RECORDS: usize = 200;
 
 impl AppStore {
     pub fn init() -> Self {
@@ -77,6 +80,7 @@ impl AppStore {
         Self {
             settings: JsonStore::new(base.join("settings.json")),
             stats: JsonStore::new(base.join("stats.json")),
+            history: JsonStore::new(base.join("history.json")),
         }
     }
 
@@ -99,6 +103,39 @@ impl AppStore {
         s.set("total_count", serde_json::json!(count + 1));
         if let Err(e) = s.save() {
             log::error!("[store] stats save failed: {}", e);
+        }
+    }
+
+    /// 追加一条历史记录，超过 MAX_HISTORY_RECORDS 时删除最旧的
+    pub fn append_history(&self, record: Value) {
+        let h = &self.history;
+        let mut records = h.get("records")
+            .and_then(|v| v.as_array().cloned())
+            .unwrap_or_default();
+        records.push(record);
+        while records.len() > MAX_HISTORY_RECORDS {
+            records.remove(0);
+        }
+        h.set("records", Value::Array(records));
+        if let Err(e) = h.save() {
+            log::error!("[store] history save failed: {}", e);
+        }
+    }
+
+    /// 读取历史记录，倒序返回（最新在前）
+    pub fn load_history(&self) -> Vec<Value> {
+        let mut records = self.history.get("records")
+            .and_then(|v| v.as_array().cloned())
+            .unwrap_or_default();
+        records.reverse();
+        records
+    }
+
+    /// 清空历史记录
+    pub fn clear_history(&self) {
+        self.history.set("records", Value::Array(vec![]));
+        if let Err(e) = self.history.save() {
+            log::error!("[store] history clear save failed: {}", e);
         }
     }
 }

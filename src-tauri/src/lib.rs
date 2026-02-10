@@ -250,7 +250,7 @@ fn load_hotkey_configs_from_store(app: &tauri::AppHandle) -> Option<Vec<HotkeyCo
 /// 润色+输出+延迟的统一流程，供 FinalResult 和 Disconnected fallback 共用
 /// 返回值：是否润色失败（决定 Finished 前的延迟时长）
 async fn polish_and_output(app: &tauri::AppHandle, session_id: u64, text: &str) -> bool {
-    let (final_text, polish_failed) = match get_polish_config(app) {
+    let (final_text, polished_text, polish_failed) = match get_polish_config(app) {
         Some(config) => {
             // 润色开启：跳过 FinalResult，直接 emit Polishing 携带原文
             let _ = app.emit("asr-event", serde_json::json!({
@@ -263,7 +263,7 @@ async fn polish_and_output(app: &tauri::AppHandle, session_id: u64, text: &str) 
                         "sessionId": session_id,
                         "event": {"PolishResult": &polished}
                     }));
-                    (polished, false)
+                    (polished.clone(), Some(polished), false)
                 }
                 Err(e) => {
                     log::error!("[asr-forward] polish failed: {}", e);
@@ -271,7 +271,7 @@ async fn polish_and_output(app: &tauri::AppHandle, session_id: u64, text: &str) 
                         "sessionId": session_id,
                         "event": "PolishError"
                     }));
-                    (text.to_string(), true)
+                    (text.to_string(), None, true)
                 }
             }
         }
@@ -281,10 +281,21 @@ async fn polish_and_output(app: &tauri::AppHandle, session_id: u64, text: &str) 
                 "sessionId": session_id,
                 "event": {"FinalResult": text}
             }));
-            (text.to_string(), false)
+            (text.to_string(), None, false)
         }
     };
     output_text_from_store(app, &final_text);
+
+    // 写入历史记录
+    let store = app.state::<AppStore>();
+    let timestamp = chrono::Local::now().format("%Y-%m-%dT%H:%M:%S").to_string();
+    store.append_history(serde_json::json!({
+        "timestamp": timestamp,
+        "asrText": text,
+        "polishedText": polished_text,
+        "outputText": final_text,
+    }));
+
     let delay = if polish_failed { 3 } else { 1 };
     tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
     polish_failed
@@ -553,6 +564,8 @@ pub fn run() {
             cmd_restore_autostart,
             cmd_check_autostart,
             cmd_get_data_dir,
+            cmd_load_history,
+            cmd_clear_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -982,4 +995,17 @@ fn cmd_get_data_dir() -> serde_json::Value {
         "settings": base.join("settings.json").to_string_lossy().into_owned(),
         "logs": base.join("logs").join("sayble.log").to_string_lossy().into_owned(),
     })
+}
+
+#[tauri::command]
+fn cmd_load_history(app: tauri::AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    let store = app.state::<AppStore>();
+    Ok(store.load_history())
+}
+
+#[tauri::command]
+fn cmd_clear_history(app: tauri::AppHandle) -> Result<(), String> {
+    let store = app.state::<AppStore>();
+    store.clear_history();
+    Ok(())
 }
