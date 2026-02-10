@@ -213,21 +213,54 @@ fn output_text_from_store(app: &tauri::AppHandle, text: &str) {
 /// 从持久化 store 中读取录音相关设置
 fn load_recording_settings_from_store(app: &tauri::AppHandle) -> Result<(AsrConfig, String), String> {
     let store = app.state::<AppStore>();
-    let settings = store.settings().get("app_settings")
-        .ok_or("No app_settings found in store")?;
 
-    let app_id = settings.get("appId").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let access_key = settings.get("accessKey").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let device_name = settings.get("microphoneDevice").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    // 从 app_settings 读取麦克风设备
+    let app_settings = store.settings().get("app_settings");
+    let device_name = app_settings.as_ref()
+        .and_then(|s| s.get("microphoneDevice"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    // 从 asr_settings 读取 ASR 配置
+    let asr_settings = store.settings().get("asr_settings")
+        .ok_or("No asr_settings found in store")?;
+
+    let selected_provider = asr_settings.get("selectedProvider")
+        .and_then(|v| v.as_str())
+        .unwrap_or("volcengine");
+
+    let providers = asr_settings.get("providers")
+        .and_then(|v| v.as_object());
+
+    let credentials = providers
+        .and_then(|p| p.get(selected_provider))
+        .and_then(|v| v.as_object())
+        .ok_or("未找到所选 ASR 服务商的配置")?;
+
+    let language = credentials.get("language")
+        .and_then(|v| v.as_str())
+        .unwrap_or("zh")
+        .to_string();
+
+    let auto_punctuation = credentials.get("autoPunctuation")
+        .and_then(|v| v.as_str())
+        .map(|v| v == "true")
+        .unwrap_or(true);
+
+    // 当前只支持 volcengine
+    let app_id = credentials.get("appId").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let access_key = credentials.get("accessKey").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
     if app_id.is_empty() || access_key.is_empty() {
-        return Err("API 配置不完整，请先在设置中填写 App ID 和 Access Key".to_string());
+        return Err("API 配置不完整，请先在设置中填写认证信息".to_string());
     }
 
     let asr_config = AsrConfig {
         app_id,
         access_key,
-        ..Default::default()
+        language,
+        auto_punctuation,
     };
 
     Ok((asr_config, device_name))
@@ -624,15 +657,26 @@ fn cmd_list_audio_devices() -> Result<Vec<audio::AudioDevice>, String> {
 
 #[tauri::command]
 async fn cmd_test_asr_connection(
-    app_id: String,
-    access_key: String,
+    provider_type: String,
+    credentials: serde_json::Value,
 ) -> Result<String, String> {
-    let config = AsrConfig {
-        app_id,
-        access_key,
-        ..Default::default()
-    };
-    asr::volcengine::test_connection(&config).await
+    // 当前只支持 volcengine
+    match provider_type.as_str() {
+        "volcengine" => {
+            let app_id = credentials.get("appId").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let access_key = credentials.get("accessKey").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            if app_id.is_empty() || access_key.is_empty() {
+                return Err("请填写完整的认证信息".to_string());
+            }
+            let config = AsrConfig {
+                app_id,
+                access_key,
+                ..Default::default()
+            };
+            asr::volcengine::test_connection(&config).await
+        }
+        _ => Err(format!("不支持的 ASR 服务商: {}", provider_type)),
+    }
 }
 
 #[tauri::command]
@@ -940,16 +984,9 @@ fn start_recording_inner(
 async fn cmd_start_recording(
     app: tauri::AppHandle,
     flag: tauri::State<'_, Arc<Mutex<RecordingFlag>>>,
-    app_id: String,
-    access_key: String,
-    device_name: String,
 ) -> Result<(), String> {
-    log::info!("[cmd] start_recording called, device={}", device_name);
-    let asr_config = AsrConfig {
-        app_id,
-        access_key,
-        ..Default::default()
-    };
+    log::info!("[cmd] start_recording called");
+    let (asr_config, device_name) = load_recording_settings_from_store(&app)?;
     start_recording_inner(&app, &flag, asr_config, device_name)?;
     Ok(())
 }

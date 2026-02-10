@@ -4,10 +4,6 @@ export interface AudioDevice {
 }
 
 export interface AppSettings {
-  appId: string;
-  accessKey: string;
-  language: string;
-  autoPunctuation: boolean;
   outputMode: "Clipboard" | "SimulateKeyboard";
   microphoneDevice: string;
   autoStart: boolean;
@@ -17,10 +13,6 @@ export interface AppSettings {
 }
 
 export const defaultSettings: AppSettings = {
-  appId: "",
-  accessKey: "",
-  language: "zh",
-  autoPunctuation: true,
   outputMode: "Clipboard",
   microphoneDevice: "",
   autoStart: false,

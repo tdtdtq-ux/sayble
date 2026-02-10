@@ -9,6 +9,7 @@ import { About } from "./About";
 import { AppIcon } from "./AppIcon";
 import { defaultSettings, type AppSettings } from "@/types/settings";
 import { defaultPolishSettings, builtinPrompts, type PolishSettings as PolishSettingsType } from "@/types/polish";
+import { defaultAsrSettings, type AsrSettings } from "@/types/asr";
 
 export interface SettingsHandle {
   showAbout: () => void;
@@ -32,6 +33,7 @@ type TabKey = (typeof menuItems)[number]["key"];
 export function Settings({ ref, onBack, onAutostartWarning }: SettingsProps) {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [polishSettings, setPolishSettings] = useState<PolishSettingsType>(defaultPolishSettings);
+  const [asrSettings, setAsrSettings] = useState<AsrSettings>(defaultAsrSettings);
   const [activeTab, setActiveTab] = useState<TabKey>("voice");
 
   useImperativeHandle(ref, () => ({
@@ -48,6 +50,9 @@ export function Settings({ ref, onBack, onAutostartWarning }: SettingsProps) {
       if (result) {
         if (result.app_settings) {
           setSettings((prev) => ({ ...prev, ...(result.app_settings as Partial<AppSettings>) }));
+        }
+        if (result.asr_settings) {
+          setAsrSettings((prev) => ({ ...prev, ...(result.asr_settings as Partial<AsrSettings>) }));
         }
         if (result.polish_settings) {
           const loaded = result.polish_settings as Partial<PolishSettingsType>;
@@ -75,6 +80,8 @@ export function Settings({ ref, onBack, onAutostartWarning }: SettingsProps) {
   settingsRef.current = settings;
   const polishSettingsRef = useRef(polishSettings);
   polishSettingsRef.current = polishSettings;
+  const asrSettingsRef = useRef(asrSettings);
+  asrSettingsRef.current = asrSettings;
 
   useEffect(() => {
     return () => {
@@ -89,6 +96,7 @@ export function Settings({ ref, onBack, onAutostartWarning }: SettingsProps) {
         await invoke("cmd_save_settings", {
           settings: {
             app_settings: settingsRef.current,
+            asr_settings: asrSettingsRef.current,
             polish_settings: polishSettingsRef.current,
           },
         });
@@ -107,6 +115,12 @@ export function Settings({ ref, onBack, onAutostartWarning }: SettingsProps) {
       debouncedSave();
       return next;
     });
+  }, [debouncedSave]);
+
+  const updateAsrSettings = useCallback((next: AsrSettings) => {
+    setAsrSettings(next);
+    asrSettingsRef.current = next;
+    debouncedSave();
   }, [debouncedSave]);
 
   const updatePolishSettings = useCallback((next: PolishSettingsType) => {
@@ -156,7 +170,7 @@ export function Settings({ ref, onBack, onAutostartWarning }: SettingsProps) {
 
       {/* 右侧内容区 */}
       <div className="flex-1 min-w-0 overflow-y-auto custom-scrollbar px-6 pt-6 pb-6">
-          {activeTab === "voice" && <VoiceSettings settings={settings} onUpdate={updateSetting} />}
+          {activeTab === "voice" && <VoiceSettings settings={asrSettings} onUpdate={updateAsrSettings} />}
           {activeTab === "polish" && <PolishSettings settings={polishSettings} onChange={updatePolishSettings} />}
           {activeTab === "general" && (
             <GeneralSettings
