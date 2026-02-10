@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { toast } from "sonner";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,24 +24,22 @@ interface VoiceSettingsProps {
 
 export function VoiceSettings({ settings, onUpdate }: VoiceSettingsProps) {
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<string | null>(null);
   const [showAccessKey, setShowAccessKey] = useState(false);
 
   const handleTestConnection = async () => {
     setTesting(true);
-    setTestResult(null);
     try {
       if (!settings.appId || !settings.accessKey) {
-        setTestResult("请先填写完整的 API 配置");
+        toast.error("请先填写完整的 API 配置");
         return;
       }
       const msg = await invoke<string>("cmd_test_asr_connection", {
         appId: settings.appId,
         accessKey: settings.accessKey,
       });
-      setTestResult(msg);
+      toast.success(msg);
     } catch (e) {
-      setTestResult(`测试失败: ${e}`);
+      toast.error(`测试失败: ${e}`);
     } finally {
       setTesting(false);
     }
@@ -62,9 +61,6 @@ export function VoiceSettings({ settings, onUpdate }: VoiceSettingsProps) {
             {testing ? "测试中..." : "测试连接"}
           </Button>
         </CardAction>
-        {testResult && (
-          <p className="text-sm text-muted-foreground">{testResult}</p>
-        )}
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center gap-4">

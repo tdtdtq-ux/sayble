@@ -436,6 +436,7 @@ pub fn run() {
             cmd_load_stats,
             cmd_restore_autostart,
             cmd_check_autostart,
+            cmd_get_data_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -849,4 +850,13 @@ fn cmd_load_stats(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
         "totalChars": stats.get("total_chars").and_then(|v| v.as_i64()).unwrap_or(0),
         "totalCount": stats.get("total_count").and_then(|v| v.as_i64()).unwrap_or(0),
     }))
+}
+
+#[tauri::command]
+fn cmd_get_data_dir() -> serde_json::Value {
+    let base = store::base_dir();
+    serde_json::json!({
+        "settings": base.to_string_lossy(),
+        "logs": base.join("logs").to_string_lossy().into_owned(),
+    })
 }
