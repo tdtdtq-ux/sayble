@@ -1,5 +1,3 @@
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PolishHome } from "./PolishHome";
 import { PolishProviderManager } from "./PolishProviderManager";
 import { type PolishSettings as PolishSettingsType, type PolishProvider } from "@/types/polish";
 
@@ -18,18 +16,16 @@ export function PolishSettings({ settings, onChange }: PolishSettingsProps) {
     onChange(next);
   };
 
+  const handleSelectProvider = (id: string) => {
+    onChange({ ...settings, selectedProviderId: id });
+  };
+
   return (
-    <Tabs defaultValue="home">
-      <TabsList>
-        <TabsTrigger value="home">首页</TabsTrigger>
-        <TabsTrigger value="providers">供应商</TabsTrigger>
-      </TabsList>
-      <TabsContent value="home">
-        <PolishHome settings={settings} onChange={onChange} />
-      </TabsContent>
-      <TabsContent value="providers">
-        <PolishProviderManager providers={settings.providers} onChange={handleProvidersChange} selectedProviderId={settings.selectedProviderId} />
-      </TabsContent>
-    </Tabs>
+    <PolishProviderManager
+      providers={settings.providers}
+      onChange={handleProvidersChange}
+      selectedProviderId={settings.selectedProviderId}
+      onSelectProvider={handleSelectProvider}
+    />
   );
 }

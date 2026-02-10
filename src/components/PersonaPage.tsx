@@ -120,7 +120,7 @@ export function PersonaPage({
       {/* 下方左右分栏 */}
       <div className="flex flex-1 min-h-0">
         {/* 左侧列表 */}
-        <div className="w-48 shrink-0 overflow-y-auto custom-scrollbar space-y-1.5 pb-4 pl-4">
+        <div className="w-48 shrink-0 overflow-y-auto custom-scrollbar space-y-1.5 pb-4 pl-6">
           {prompts.map((prompt) => (
             <button
               key={prompt.id}
@@ -137,7 +137,7 @@ export function PersonaPage({
               <span className="block text-[11px] text-muted-foreground mt-0.5">
                 {isBuiltin(prompt.id) ? "内置" : "自定义"}
                 {prompt.id === selectedPromptId && (
-                  <span className="text-primary ml-1.5">· 使用中</span>
+                  <span className="bg-foreground text-background rounded px-1 py-0.5 ml-1.5">使用中</span>
                 )}
               </span>
             </button>

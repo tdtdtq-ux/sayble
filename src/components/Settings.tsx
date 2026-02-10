@@ -22,8 +22,8 @@ interface SettingsProps {
 }
 
 const menuItems = [
-  { key: "voice", label: "ASR识别", icon: Mic },
-  { key: "polish", label: "LLM润色", icon: Sparkles },
+  { key: "voice", label: "ASR管理", icon: Mic },
+  { key: "polish", label: "LLM管理", icon: Sparkles },
   { key: "general", label: "通用", icon: Settings2 },
   { key: "about", label: "关于", icon: Info },
 ] as const;
@@ -169,9 +169,13 @@ export function Settings({ ref, onBack, onAutostartWarning }: SettingsProps) {
       </div>
 
       {/* 右侧内容区 */}
-      <div className="flex-1 min-w-0 overflow-y-auto custom-scrollbar px-6 pt-6 pb-6">
+      {activeTab === "polish" ? (
+        <div className="flex-1 min-w-0 flex flex-col">
+          <PolishSettings settings={polishSettings} onChange={updatePolishSettings} />
+        </div>
+      ) : (
+        <div className="flex-1 min-w-0 overflow-y-auto custom-scrollbar px-6 pt-6 pb-6">
           {activeTab === "voice" && <VoiceSettings settings={asrSettings} onUpdate={updateAsrSettings} />}
-          {activeTab === "polish" && <PolishSettings settings={polishSettings} onChange={updatePolishSettings} />}
           {activeTab === "general" && (
             <GeneralSettings
               settings={settings}
@@ -181,6 +185,7 @@ export function Settings({ ref, onBack, onAutostartWarning }: SettingsProps) {
           )}
           {activeTab === "about" && <About />}
         </div>
+      )}
     </div>
   );
 }
