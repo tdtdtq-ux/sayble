@@ -431,6 +431,7 @@ pub fn run() {
             cmd_save_settings,
             cmd_load_settings,
             cmd_test_asr_connection,
+            cmd_test_polish_provider,
             cmd_start_recording,
             cmd_stop_recording,
             cmd_load_stats,
@@ -516,6 +517,36 @@ async fn cmd_test_asr_connection(
         ..Default::default()
     };
     asr::volcengine::test_connection(&config).await
+}
+
+#[tauri::command]
+async fn cmd_test_polish_provider(
+    base_url: String,
+    api_key: String,
+) -> Result<String, String> {
+    log::info!("[cmd] test_polish_provider called, base_url={}", base_url);
+    let url = format!("{}/models", base_url.trim_end_matches('/'));
+    log::info!("[cmd] test_polish_provider GET {}", url);
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| {
+            log::error!("[cmd] test_polish_provider request error: {}", e);
+            format!("请求失败: {}", e)
+        })?;
+    let status = resp.status();
+    if status.is_success() {
+        log::info!("[cmd] test_polish_provider success, status={}", status);
+        Ok("连接成功".to_string())
+    } else {
+        let body = resp.text().await.unwrap_or_default();
+        log::warn!("[cmd] test_polish_provider failed, status={}, body={}", status, body);
+        Err(format!("连接失败，状态码: {}", status))
+    }
 }
 
 #[tauri::command]

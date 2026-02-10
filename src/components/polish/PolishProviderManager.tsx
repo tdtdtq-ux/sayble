@@ -1,7 +1,16 @@
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { invoke } from "@tauri-apps/api/core";
+import { toast } from "sonner";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Plus, Pencil, Trash2, Plug } from "lucide-react";
 import { PolishProviderForm } from "./PolishProviderForm";
 import type { PolishProvider } from "@/types/polish";
 
@@ -11,24 +20,49 @@ interface PolishProviderManagerProps {
 }
 
 export function PolishProviderManager({ providers, onChange }: PolishProviderManagerProps) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [isAdding, setIsAdding] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingProvider, setEditingProvider] = useState<PolishProvider | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [testingId, setTestingId] = useState<string | null>(null);
 
-  const handleAdd = (data: Omit<PolishProvider, "id">) => {
-    const newProvider: PolishProvider = { id: crypto.randomUUID(), ...data };
-    onChange([...providers, newProvider]);
-    setIsAdding(false);
+  const openAddDialog = () => {
+    setEditingProvider(null);
+    setDialogOpen(true);
   };
 
-  const handleEdit = (id: string, data: Omit<PolishProvider, "id">) => {
-    onChange(providers.map((p) => (p.id === id ? { ...p, ...data } : p)));
-    setEditingId(null);
+  const openEditDialog = (provider: PolishProvider) => {
+    setEditingProvider(provider);
+    setDialogOpen(true);
+  };
+
+  const handleSave = (data: Omit<PolishProvider, "id">) => {
+    if (editingProvider) {
+      onChange(providers.map((p) => (p.id === editingProvider.id ? { ...p, ...data } : p)));
+    } else {
+      const newProvider: PolishProvider = { id: crypto.randomUUID(), ...data };
+      onChange([...providers, newProvider]);
+    }
+    setDialogOpen(false);
   };
 
   const handleDelete = (id: string) => {
     onChange(providers.filter((p) => p.id !== id));
     setDeletingId(null);
+  };
+
+  const handleTestConnection = async (provider: PolishProvider) => {
+    setTestingId(provider.id);
+    try {
+      const msg = await invoke<string>("cmd_test_polish_provider", {
+        baseUrl: provider.baseUrl,
+        apiKey: provider.apiKey,
+      });
+      toast.success(msg);
+    } catch (e) {
+      toast.error(`${e}`);
+    } finally {
+      setTestingId(null);
+    }
   };
 
   return (
@@ -38,29 +72,14 @@ export function PolishProviderManager({ providers, onChange }: PolishProviderMan
         <Button
           variant="outline"
           size="sm"
-          onClick={() => { setIsAdding(true); setEditingId(null); }}
-          disabled={isAdding}
+          onClick={openAddDialog}
         >
           <Plus className="size-4 mr-1" />
           新建
         </Button>
       </div>
 
-      {isAdding && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">新建供应商</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <PolishProviderForm
-              onSave={handleAdd}
-              onCancel={() => setIsAdding(false)}
-            />
-          </CardContent>
-        </Card>
-      )}
-
-      {providers.length === 0 && !isAdding && (
+      {providers.length === 0 && (
         <p className="text-sm text-muted-foreground py-4 text-center">
           暂无供应商，点击"新建"添加
         </p>
@@ -68,62 +87,74 @@ export function PolishProviderManager({ providers, onChange }: PolishProviderMan
 
       {providers.map((provider) => (
         <Card key={provider.id}>
-          {editingId === provider.id ? (
-            <>
-              <CardHeader>
-                <CardTitle className="text-sm">编辑供应商</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <PolishProviderForm
-                  initial={provider}
-                  onSave={(data) => handleEdit(provider.id, data)}
-                  onCancel={() => setEditingId(null)}
-                />
-              </CardContent>
-            </>
-          ) : (
-            <CardContent className="pt-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1 space-y-1">
-                  <p className="font-medium text-sm">{provider.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{provider.baseUrl}</p>
-                  <p className="text-xs text-muted-foreground">模型: {provider.model}</p>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
+          <CardContent>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1 space-y-1">
+                <p className="font-medium text-sm">{provider.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{provider.baseUrl}</p>
+                <p className="text-xs text-muted-foreground">模型: {provider.model}</p>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  disabled={testingId === provider.id}
+                  onClick={() => handleTestConnection(provider)}
+                  title="测试连接"
+                >
+                  <Plug className={`size-3.5 ${testingId === provider.id ? "animate-pulse" : ""}`} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  onClick={() => { openEditDialog(provider); setDeletingId(null); }}
+                >
+                  <Pencil className="size-3.5" />
+                </Button>
+                {deletingId === provider.id ? (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => handleDelete(provider.id)}
+                    onBlur={() => setDeletingId(null)}
+                  >
+                    确认删除?
+                  </Button>
+                ) : (
                   <Button
                     variant="ghost"
                     size="icon"
                     className="size-8"
-                    onClick={() => { setEditingId(provider.id); setIsAdding(false); setDeletingId(null); }}
+                    onClick={() => setDeletingId(provider.id)}
                   >
-                    <Pencil className="size-3.5" />
+                    <Trash2 className="size-3.5" />
                   </Button>
-                  {deletingId === provider.id ? (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="text-xs"
-                      onClick={() => handleDelete(provider.id)}
-                      onBlur={() => setDeletingId(null)}
-                    >
-                      确认删除?
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-8"
-                      onClick={() => setDeletingId(provider.id)}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  )}
-                </div>
+                )}
               </div>
-            </CardContent>
-          )}
+            </div>
+          </CardContent>
         </Card>
       ))}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingProvider ? "编辑供应商" : "新建供应商"}</DialogTitle>
+            <DialogDescription>
+              {editingProvider ? "修改供应商的连接信息" : "填写新供应商的连接信息"}
+            </DialogDescription>
+          </DialogHeader>
+          <PolishProviderForm
+            key={editingProvider?.id ?? "__new__"}
+            initial={editingProvider ?? undefined}
+            onSave={handleSave}
+            onCancel={() => setDialogOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

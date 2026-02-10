@@ -49,7 +49,7 @@ React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 - **FloatingApp.tsx** — 浮窗入口，独立窗口，监听 ASR 事件（带 sessionId 过滤）和 floating-control 事件，管理文字输出
 - **FloatingWindow.tsx** — 浮窗 UI 组件（录音状态指示、实时识别文字、计时器）
 - **HotkeyRecorder.tsx** — 快捷键录制组件
-- **components/ui/** — shadcn/ui 组件库（button, card, input, select 等）
+- **components/ui/** — shadcn/ui 组件库（button, card, dialog, input, select 等）
 
 路径别名：`@/*` → `./src/*`
 
@@ -87,6 +87,7 @@ Rust，按功能模块划分：
 - `cmd_stop_recording()` — 停止录音
 - `cmd_output_text(text, mode)` — 通过剪贴板或键盘模拟输出文字
 - `cmd_test_asr_connection(appId, accessKey)` — 测试 ASR 连接
+- `cmd_test_polish_provider(baseUrl, apiKey)` — 测试润色供应商连接（GET /models）
 - `cmd_save_settings(settings)` / `cmd_load_settings()` — 设置持久化（全量读写，settings 为 `{ app_settings, polish_settings, ... }` 结构）
 - `cmd_get_data_dir()` — 返回数据目录路径（settings、logs）
 
@@ -95,6 +96,7 @@ Rust，按功能模块划分：
 - **tokio-tungstenite** — ASR WebSocket 通信
 - **cpal** — 跨平台音频 I/O
 - **enigo** — 跨平台键盘模拟
+- **reqwest** — HTTP client（润色供应商连接测试、后续 OpenAI API 调用）
 - **windows** crate (0.58) — Windows 底层 API（钩子、输入）
 
 ## Testing

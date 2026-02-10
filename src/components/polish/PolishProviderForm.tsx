@@ -33,7 +33,7 @@ export function PolishProviderForm({ initial, onSave, onCancel }: PolishProvider
   return (
     <div className="space-y-3 py-2">
       <div className="flex items-center gap-4">
-        <Label className="shrink-0 w-24">名称</Label>
+        <Label className="shrink-0 w-20">名称</Label>
         <Input
           placeholder="如 DeepSeek"
           value={name}
@@ -42,7 +42,7 @@ export function PolishProviderForm({ initial, onSave, onCancel }: PolishProvider
         />
       </div>
       <div className="flex items-center gap-4">
-        <Label className="shrink-0 w-24">API Base URL</Label>
+        <Label className="shrink-0 w-20">API Base URL</Label>
         <Input
           placeholder="如 https://api.deepseek.com/v1"
           value={baseUrl}
@@ -51,7 +51,7 @@ export function PolishProviderForm({ initial, onSave, onCancel }: PolishProvider
         />
       </div>
       <div className="flex items-center gap-4">
-        <Label className="shrink-0 w-24">API Key</Label>
+        <Label className="shrink-0 w-20">API Key</Label>
         <div className="relative flex-1">
           <Input
             type={showApiKey ? "text" : "password"}
@@ -70,7 +70,7 @@ export function PolishProviderForm({ initial, onSave, onCancel }: PolishProvider
         </div>
       </div>
       <div className="flex items-center gap-4">
-        <Label className="shrink-0 w-24">模型名称</Label>
+        <Label className="shrink-0 w-20">模型名称</Label>
         <Input
           placeholder="如 deepseek-chat"
           value={model}
