@@ -17,6 +17,7 @@ export interface AsrProviderMeta {
   type: AsrProviderType;
   name: string;
   description: string;
+  docUrl?: string;
   fields: AsrProviderField[];
 }
 
@@ -33,8 +34,9 @@ export interface AsrSettings {
 export const builtinAsrProviders: AsrProviderMeta[] = [
   {
     type: "volcengine",
-    name: "火山引擎",
+    name: "豆包识别2.0",
     description: "字节跳动旗下的语音识别服务，支持中文、英文及自动检测",
+    docUrl: "https://www.volcengine.com/docs/6561/1354869?lang=zh",
     fields: [
       {
         key: "appId",

@@ -169,13 +169,13 @@ export function Settings({ ref, onBack, onAutostartWarning }: SettingsProps) {
       </div>
 
       {/* 右侧内容区 */}
-      {activeTab === "polish" ? (
+      {activeTab === "polish" || activeTab === "voice" ? (
         <div className="flex-1 min-w-0 flex flex-col">
-          <PolishSettings settings={polishSettings} onChange={updatePolishSettings} />
+          {activeTab === "polish" && <PolishSettings settings={polishSettings} onChange={updatePolishSettings} />}
+          {activeTab === "voice" && <VoiceSettings settings={asrSettings} onUpdate={updateAsrSettings} />}
         </div>
       ) : (
         <div className="flex-1 min-w-0 overflow-y-auto custom-scrollbar px-6 pt-6 pb-6">
-          {activeTab === "voice" && <VoiceSettings settings={asrSettings} onUpdate={updateAsrSettings} />}
           {activeTab === "general" && (
             <GeneralSettings
               settings={settings}
