@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Plus, Trash2, Check } from "lucide-react";
 import type { PolishPrompt } from "@/types/polish";
 import { builtinPromptIds } from "@/types/polish";
@@ -11,6 +12,8 @@ interface PersonaPageProps {
   onChange: (prompts: PolishPrompt[]) => void;
   selectedPromptId: string;
   onSelectPrompt: (id: string) => void;
+  enabled: boolean;
+  onEnabledChange: (enabled: boolean) => void;
 }
 
 export function PersonaPage({
@@ -18,6 +21,8 @@ export function PersonaPage({
   onChange,
   selectedPromptId,
   onSelectPrompt,
+  enabled,
+  onEnabledChange,
 }: PersonaPageProps) {
   const [activeId, setActiveId] = useState<string>(
     prompts[0]?.id ?? ""
@@ -110,7 +115,10 @@ export function PersonaPage({
     <div className="flex flex-col h-full min-h-0">
       {/* 顶部标题栏 */}
       <div className="flex items-center justify-between px-6 py-3 shrink-0">
-        <h2 className="text-base font-semibold">设置您的人设</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-base font-semibold">设置您的人设</h2>
+          <Switch checked={enabled} onCheckedChange={onEnabledChange} />
+        </div>
         <Button variant="outline" size="sm" onClick={handleCreate}>
           <Plus className="size-4 mr-1" />
           新建

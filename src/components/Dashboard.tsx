@@ -100,6 +100,15 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
     debouncedSave();
   }, [debouncedSave]);
 
+  const handleEnabledChange = useCallback((enabled: boolean) => {
+    setPolishSettings((prev) => {
+      const next = { ...prev, enabled };
+      polishSettingsRef.current = next;
+      return next;
+    });
+    debouncedSave();
+  }, [debouncedSave]);
+
   return (
     <div className="h-full flex">
       {/* 左侧菜单 */}
@@ -146,6 +155,8 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
             onChange={handlePromptsChange}
             selectedPromptId={polishSettings.selectedPromptId}
             onSelectPrompt={handleSelectPrompt}
+            enabled={polishSettings.enabled}
+            onEnabledChange={handleEnabledChange}
           />
         )}
       </div>
