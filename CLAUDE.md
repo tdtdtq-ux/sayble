@@ -69,7 +69,7 @@ React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 - **前端不参与录音控制** — App.tsx 只负责设置界面，不监听热键事件
 - **ASR 事件携带 sessionId** — 前端用 `maxSessionRef` 比大小过滤旧 session 的迟到事件
 - **Disconnected 不暴露给前端** — 后端内部消化，fallback 为 FinalResult + Finished
-- **文字输出后端闭环** — 后端收到 FinalResult 后直接从 store 读取 outputMode/autoOutput 并执行输出，前端浮窗只负责展示状态
+- **文字输出后端闭环** — 后端收到 FinalResult 后，先判断润色开关：关闭则直接 emit FinalResult + output；开启则 emit Polishing（携带原文）→ 调用 LLM API → 成功 emit PolishResult / 失败 emit PolishError → output(final_text) → 延迟(成功1s/失败3s) → Finished
 - **异步 listener 注册使用 cancelled 标志** — 防止 React StrictMode 双重执行导致 listener 泄漏
 
 ### 后端 (src-tauri/src/)
@@ -85,6 +85,7 @@ Rust，按功能模块划分：
 | `store.rs` | 数据持久化 — 自封装 JsonStore，统一管理 `~/.sayble/` 下的 settings/stats |
 | `tray/` | 系统托盘图标与菜单 |
 | `config.rs` | 配置类型定义（如 OutputMode 枚举） |
+| `polish.rs` | LLM 润色 — 调用 OpenAI 兼容 API（POST /chat/completions）对 ASR 文字润色 |
 
 ### Tauri Commands（前后端 IPC 接口）
 
@@ -138,6 +139,7 @@ Vitest + jsdom 环境 + @testing-library/react。测试文件放在对应目录�
 | `[store]` | store.rs | 数据持久化（JsonStore 读写） |
 | `[tray]` | tray/ | 系统托盘 |
 | `[autostart]` | lib.rs | 开机自启动 |
+| `[polish]` | polish.rs | LLM 润色（API 调用、结果处理） |
 
 ## Work Rules
 

@@ -64,7 +64,7 @@ export function FloatingApp() {
 
     listen<{
       sessionId: number;
-      event: string | { PartialResult?: string; FinalResult?: string; Error?: string; Connected?: null };
+      event: string | { PartialResult?: string; FinalResult?: string; PolishResult?: string; Polishing?: string; Error?: string; Connected?: null };
     }>("asr-event", (ev) => {
       if (cancelled) return;
       const { sessionId, event } = ev.payload;
@@ -97,6 +97,12 @@ export function FloatingApp() {
         } else if ("FinalResult" in event && event.FinalResult) {
           type = "FinalResult";
           data = event.FinalResult;
+        } else if ("PolishResult" in event && event.PolishResult) {
+          type = "PolishResult";
+          data = event.PolishResult;
+        } else if ("Polishing" in event) {
+          type = "Polishing";
+          data = typeof event.Polishing === "string" ? event.Polishing : "";
         } else if ("Error" in event) {
           type = "Error";
         } else if ("Connected" in event) {
@@ -115,6 +121,18 @@ export function FloatingApp() {
         setFinalText(data);
         setFloatingStatus("done");
         clearTimer();
+      } else if (type === "Polishing") {
+        info("[asr-event] session " + sessionId + " Polishing");
+        if (data) setFinalText(data);
+        setFloatingStatus("polishing");
+        clearTimer();
+      } else if (type === "PolishResult") {
+        info("[asr-event] session " + sessionId + " PolishResult, text_len=" + data.length);
+        setFinalText(data);
+        setFloatingStatus("done");
+      } else if (type === "PolishError") {
+        info("[asr-event] session " + sessionId + " PolishError");
+        setFloatingStatus("polish_error");
       } else if (type === "Finished") {
         info("[asr-event] session " + sessionId + " Finished");
         setFloatingStatus("idle");

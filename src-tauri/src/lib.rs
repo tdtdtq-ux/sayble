@@ -3,6 +3,7 @@ pub mod audio;
 pub mod config;
 pub mod hotkey;
 pub mod input;
+pub mod polish;
 pub mod store;
 pub mod tray;
 
@@ -244,6 +245,96 @@ fn load_hotkey_configs_from_store(app: &tauri::AppHandle) -> Option<Vec<HotkeyCo
     } else {
         Some(configs)
     }
+}
+
+/// 润色+输出+延迟的统一流程，供 FinalResult 和 Disconnected fallback 共用
+/// 返回值：是否润色失败（决定 Finished 前的延迟时长）
+async fn polish_and_output(app: &tauri::AppHandle, session_id: u64, text: &str) -> bool {
+    let (final_text, polish_failed) = match get_polish_config(app) {
+        Some(config) => {
+            // 润色开启：跳过 FinalResult，直接 emit Polishing 携带原文
+            let _ = app.emit("asr-event", serde_json::json!({
+                "sessionId": session_id,
+                "event": {"Polishing": text}
+            }));
+            match polish::polish_text(&config, text).await {
+                Ok(polished) => {
+                    let _ = app.emit("asr-event", serde_json::json!({
+                        "sessionId": session_id,
+                        "event": {"PolishResult": &polished}
+                    }));
+                    (polished, false)
+                }
+                Err(e) => {
+                    log::error!("[asr-forward] polish failed: {}", e);
+                    let _ = app.emit("asr-event", serde_json::json!({
+                        "sessionId": session_id,
+                        "event": "PolishError"
+                    }));
+                    (text.to_string(), true)
+                }
+            }
+        }
+        None => {
+            // 润色关闭：正常 emit FinalResult
+            let _ = app.emit("asr-event", serde_json::json!({
+                "sessionId": session_id,
+                "event": {"FinalResult": text}
+            }));
+            (text.to_string(), false)
+        }
+    };
+    output_text_from_store(app, &final_text);
+    let delay = if polish_failed { 3 } else { 1 };
+    tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+    polish_failed
+}
+
+/// 从持久化 store 中读取润色配置，匹配 provider 和 prompt
+fn get_polish_config(app: &tauri::AppHandle) -> Option<polish::PolishConfig> {
+    let store = app.state::<AppStore>();
+    let settings = store.settings().get("polish_settings")?;
+
+    let enabled = settings.get("enabled")?.as_bool()?;
+    if !enabled {
+        return None;
+    }
+
+    let selected_provider_id = settings.get("selectedProviderId")?.as_str()?;
+    let selected_prompt_id = settings.get("selectedPromptId")?.as_str()?;
+
+    if selected_provider_id.is_empty() || selected_prompt_id.is_empty() {
+        log::warn!("[polish] enabled but provider or prompt not selected");
+        return None;
+    }
+
+    let providers = settings.get("providers")?.as_array()?;
+    let provider = providers.iter().find(|p| {
+        p.get("id").and_then(|v| v.as_str()) == Some(selected_provider_id)
+    })?;
+
+    let prompts = settings.get("prompts")?.as_array()?;
+    let prompt = prompts.iter().find(|p| {
+        p.get("id").and_then(|v| v.as_str()) == Some(selected_prompt_id)
+    })?;
+
+    let base_url = provider.get("baseUrl")?.as_str()?.to_string();
+    let api_key = provider.get("apiKey")?.as_str()?.to_string();
+    let model = provider.get("model")?.as_str()?.to_string();
+    let prompt_content = prompt.get("content")?.as_str()?.to_string();
+
+    if base_url.is_empty() || api_key.is_empty() || model.is_empty() {
+        log::warn!("[polish] provider config incomplete");
+        return None;
+    }
+
+    log::info!("[polish] config loaded: model={}, prompt_id={}", model, selected_prompt_id);
+    Some(polish::PolishConfig {
+        base_url,
+        api_key,
+        model,
+        prompt: prompt_content,
+    })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -758,18 +849,9 @@ fn start_recording_inner(
                         #[allow(unused_assignments)]
                         AsrEvent::FinalResult(text, duration_ms) => {
                             had_final = true;
-                            // 累加统计到 stats.json
                             log::info!("[asr-forward] FinalResult received, text_len={}, duration_ms={:?}", text.len(), duration_ms);
                             app_clone.state::<AppStore>().accumulate_stats(text.chars().count(), *duration_ms);
-                            // 后端直接打印（焦点还在目标窗口）
-                            output_text_from_store(&app_clone, text);
-                            // emit 给前端（浮窗显示）
-                            let _ = app_clone.emit("asr-event", serde_json::json!({
-                                "sessionId": session_id,
-                                "event": {"FinalResult": text}
-                            }));
-                            // FinalResult 后等 1 秒再发 Finished，让前端展示"完成"状态
-                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                            polish_and_output(&app_clone, session_id, text).await;
                             let _ = app_clone.emit("asr-event", serde_json::json!({
                                 "sessionId": session_id,
                                 "event": "Finished"
@@ -793,19 +875,13 @@ fn start_recording_inner(
                         AsrEvent::Disconnected => {
                             // 内部消化：不暴露给前端
                             if !had_final {
-                                // 没有 FinalResult，用最后的 PartialResult 作为 fallback
                                 if !last_partial_text.is_empty() {
-                                    // 累加统计（fallback 场景，时长为 0）
                                     app_clone.state::<AppStore>().accumulate_stats(last_partial_text.chars().count(), None);
-                                    // 后端直接打印
-                                    output_text_from_store(&app_clone, &last_partial_text);
-                                    let _ = app_clone.emit("asr-event", serde_json::json!({
-                                        "sessionId": session_id,
-                                        "event": {"FinalResult": last_partial_text}
-                                    }));
+                                    polish_and_output(&app_clone, session_id, &last_partial_text).await;
                                 }
+                            } else {
+                                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                             }
-                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                             let _ = app_clone.emit("asr-event", serde_json::json!({
                                 "sessionId": session_id,
                                 "event": "Finished"

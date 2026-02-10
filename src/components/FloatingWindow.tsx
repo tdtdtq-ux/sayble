@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
-export type FloatingStatus = "idle" | "recording" | "recognizing" | "done" | "error";
+export type FloatingStatus = "idle" | "recording" | "recognizing" | "done" | "error" | "polishing" | "polish_error";
 
 interface FloatingWindowProps {
   status: FloatingStatus;
@@ -37,11 +37,15 @@ export function FloatingWindow({
       ? partialText || "请开始说话..."
       : status === "recognizing"
         ? partialText || "正在识别..."
-        : status === "done"
-          ? finalText
-          : status === "error"
-            ? errorMessage || "连接失败"
-            : "";
+        : status === "polishing"
+          ? finalText || "润色中..."
+          : status === "done"
+            ? finalText
+            : status === "error"
+              ? errorMessage || "连接失败"
+              : status === "polish_error"
+                ? finalText
+                : "";
 
   return (
     <div
@@ -50,8 +54,10 @@ export function FloatingWindow({
         "border rounded-lg",
         status === "recording" && "border-red-500/40",
         status === "recognizing" && "border-orange-500/40",
+        status === "polishing" && "border-blue-500/40",
         status === "done" && "border-green-500/40",
-        status === "error" && "border-yellow-500/40"
+        status === "error" && "border-yellow-500/40",
+        status === "polish_error" && "border-yellow-500/40"
       )}
     >
       <div className="flex items-center gap-2 h-full">
@@ -61,8 +67,10 @@ export function FloatingWindow({
             <span className="text-xs font-medium text-neutral-300 shrink-0">
               {status === "recording" && "录音中"}
               {status === "recognizing" && "识别中"}
+              {status === "polishing" && "润色中"}
               {status === "done" && "完成"}
               {status === "error" && "出错"}
+              {status === "polish_error" && "润色失败"}
             </span>
             {status === "recording" && (
               <span className="text-[10px] text-neutral-500 tabular-nums shrink-0">
@@ -104,6 +112,9 @@ function StatusIndicator({ status }: { status: FloatingStatus }) {
       {status === "recognizing" && (
         <div className="h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-orange-500 border-t-transparent" />
       )}
+      {status === "polishing" && (
+        <div className="h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-blue-500 border-t-transparent" />
+      )}
       {status === "done" && (
         <svg
           className="h-3.5 w-3.5 text-green-500"
@@ -115,7 +126,7 @@ function StatusIndicator({ status }: { status: FloatingStatus }) {
           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
         </svg>
       )}
-      {status === "error" && (
+      {(status === "error" || status === "polish_error") && (
         <svg
           className="h-3.5 w-3.5 text-yellow-500"
           fill="none"
