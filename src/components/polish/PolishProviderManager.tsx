@@ -10,16 +10,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Plug } from "lucide-react";
+import { Plus, Pencil, Trash2, Plug, Copy } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { PolishProviderForm } from "./PolishProviderForm";
 import type { PolishProvider } from "@/types/polish";
 
 interface PolishProviderManagerProps {
   providers: PolishProvider[];
   onChange: (providers: PolishProvider[]) => void;
+  selectedProviderId?: string;
 }
 
-export function PolishProviderManager({ providers, onChange }: PolishProviderManagerProps) {
+export function PolishProviderManager({ providers, onChange, selectedProviderId }: PolishProviderManagerProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<PolishProvider | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -90,7 +92,12 @@ export function PolishProviderManager({ providers, onChange }: PolishProviderMan
           <CardContent>
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1 space-y-1">
-                <p className="font-medium text-sm">{provider.name}</p>
+                <p className="font-medium text-sm">
+                  {provider.name}
+                  {provider.id === selectedProviderId && (
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 ml-1.5">使用中</Badge>
+                  )}
+                </p>
                 <p className="text-xs text-muted-foreground truncate">{provider.baseUrl}</p>
                 <p className="text-xs text-muted-foreground">模型: {provider.model}</p>
               </div>
@@ -104,6 +111,22 @@ export function PolishProviderManager({ providers, onChange }: PolishProviderMan
                   title="测试连接"
                 >
                   <Plug className={`size-3.5 ${testingId === provider.id ? "animate-pulse" : ""}`} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  onClick={() => {
+                    const copy: PolishProvider = {
+                      ...provider,
+                      id: crypto.randomUUID(),
+                      name: `${provider.name} (副本)`,
+                    };
+                    onChange([...providers, copy]);
+                  }}
+                  title="复制"
+                >
+                  <Copy className="size-3.5" />
                 </Button>
                 <Button
                   variant="ghost"

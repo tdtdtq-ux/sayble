@@ -47,7 +47,7 @@ React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 - **general/DataSettings.tsx** — 数据 tab（设置文件路径、日志路径、打开文件夹）
 - **polish/PolishSettings.tsx** — 润色设置 tab（供应商、Prompt、开关）
 - **polish/PolishHome.tsx** — 润色首页（开关、供应商/Prompt 选择）
-- **polish/PolishProviderManager.tsx** — 供应商列表管理（Dialog 弹窗编辑，测试连接）
+- **polish/PolishProviderManager.tsx** — 供应商列表管理（Dialog 弹窗编辑，测试连接，复制供应商，选中标记）
 - **polish/PolishProviderForm.tsx** — 供应商表单（OpenAI 兼容 API 配置）
 - **polish/PolishPromptManager.tsx** — Prompt 模板列表管理（Dialog 弹窗编辑）
 - **polish/PolishPromptForm.tsx** — Prompt 模板表单
