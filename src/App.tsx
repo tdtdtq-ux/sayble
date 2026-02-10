@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Dashboard } from "@/components/Dashboard";
 import { Settings, type SettingsHandle } from "@/components/Settings";
+import { TitleBar } from "@/components/TitleBar";
 import { Toaster } from "@/components/ui/sonner";
 
 function App() {
@@ -84,6 +85,7 @@ function App() {
 
   return (
     <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
+      <TitleBar />
       {autostartWarning && (
         <div
           ref={warningRef}

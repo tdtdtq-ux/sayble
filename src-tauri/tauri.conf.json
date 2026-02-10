@@ -17,7 +17,7 @@
         "width": 1180,
         "height": 780,
         "visible": true,
-        "titleBarStyle": "Overlay"
+        "decorations": false
       },
       {
         "label": "floating",
