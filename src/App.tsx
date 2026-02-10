@@ -6,14 +6,22 @@ import { Dashboard } from "@/components/Dashboard";
 import { Settings, type SettingsHandle } from "@/components/Settings";
 import { TitleBar } from "@/components/TitleBar";
 import { Toaster } from "@/components/ui/sonner";
+import { useSettingsStore } from "@/stores/useSettingsStore";
 
 function App() {
   const settingsRef = useRef<SettingsHandle>(null);
   const [page, setPage] = useState<"home" | "settings">("home");
   const [pendingShowAbout, setPendingShowAbout] = useState(false);
-  const [autostartWarning, setAutostartWarning] = useState<string | null>(null);
-  const [flash, setFlash] = useState(false);
-  const warningRef = useRef<HTMLDivElement>(null);
+
+  const autostartWarning = useSettingsStore((s) => s.autostartWarning);
+  const autostartFlash = useSettingsStore((s) => s.autostartFlash);
+  const dismissAutostartWarning = useSettingsStore((s) => s.dismissAutostartWarning);
+  const setAutostartWarning = useSettingsStore((s) => s.setAutostartWarning);
+
+  // 加载 settings
+  useEffect(() => {
+    useSettingsStore.getState().loadSettings();
+  }, []);
 
   // 监听托盘"关于"事件
   useEffect(() => {
@@ -57,7 +65,7 @@ function App() {
     invoke<string | null>("cmd_check_autostart").then((result) => {
       setAutostartWarning(result);
     }).catch(() => {});
-  }, []);
+  }, [setAutostartWarning]);
 
   // 启动时检测 + 窗口每次获得焦点时重新检测
   useEffect(() => {
@@ -69,27 +77,12 @@ function App() {
     return () => { unlisten?.(); };
   }, [checkAutostart]);
 
-  // Settings 手动检测回调，统一用顶部警告条展示
-  const handleAutostartWarning = useCallback((source: string | null) => {
-    if (source) {
-      if (autostartWarning) {
-        // 已经在显示，闪烁提醒
-        setFlash(true);
-        setTimeout(() => setFlash(false), 600);
-      }
-      setAutostartWarning(source);
-    } else {
-      setAutostartWarning(null);
-    }
-  }, [autostartWarning]);
-
   return (
     <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
       <TitleBar />
       {autostartWarning && (
         <div
-          ref={warningRef}
-          className={`shrink-0 bg-amber-500/15 border-b border-amber-500/30 px-4 py-2.5 flex items-center justify-between gap-2 transition-opacity duration-150 ${flash ? "opacity-40" : "opacity-100"}`}
+          className={`shrink-0 bg-amber-500/15 border-b border-amber-500/30 px-4 py-2.5 flex items-center justify-between gap-2 transition-opacity duration-150 ${autostartFlash ? "opacity-40" : "opacity-100"}`}
         >
           <p className="text-sm text-amber-700 dark:text-amber-400">
             开机自启动已被第三方软件禁用（来源：{autostartWarning}）。
@@ -99,7 +92,7 @@ function App() {
               onClick={async () => {
                 try {
                   await invoke("cmd_restore_autostart");
-                  setAutostartWarning(null);
+                  dismissAutostartWarning();
                 } catch (e) {
                   console.error("restore autostart failed:", e);
                 }
@@ -109,7 +102,7 @@ function App() {
               恢复自启动
             </button>
             <button
-              onClick={() => setAutostartWarning(null)}
+              onClick={dismissAutostartWarning}
               className="text-amber-700 dark:text-amber-400 hover:opacity-70 text-lg leading-none px-1"
             >
               ×
@@ -124,7 +117,6 @@ function App() {
           <Settings
             ref={settingsRef}
             onBack={() => setPage("home")}
-            onAutostartWarning={handleAutostartWarning}
           />
         )}
       </div>

@@ -2,15 +2,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GeneralHome } from "./general/GeneralHome";
 import { HotkeySettings } from "./general/HotkeySettings";
 import { DataSettings } from "./general/DataSettings";
-import type { AppSettings } from "@/types/settings";
 
-interface GeneralSettingsProps {
-  settings: AppSettings;
-  onUpdate: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void;
-  onAutostartWarning?: (source: string | null) => void;
-}
-
-export function GeneralSettings({ settings, onUpdate, onAutostartWarning }: GeneralSettingsProps) {
+export function GeneralSettings() {
   return (
     <Tabs defaultValue="home">
       <TabsList>
@@ -19,10 +12,10 @@ export function GeneralSettings({ settings, onUpdate, onAutostartWarning }: Gene
         <TabsTrigger value="data">数据</TabsTrigger>
       </TabsList>
       <TabsContent value="home">
-        <GeneralHome settings={settings} onUpdate={onUpdate} onAutostartWarning={onAutostartWarning} />
+        <GeneralHome />
       </TabsContent>
       <TabsContent value="hotkey">
-        <HotkeySettings settings={settings} onUpdate={onUpdate} />
+        <HotkeySettings />
       </TabsContent>
       <TabsContent value="data">
         <DataSettings />

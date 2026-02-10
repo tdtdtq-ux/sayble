@@ -4,26 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Plus, Trash2, Check } from "lucide-react";
-import type { PolishPrompt } from "@/types/polish";
-import { builtinPromptIds } from "@/types/polish";
+import { builtinPromptIds, type PolishPrompt } from "@/types/polish";
+import { useSettingsStore } from "@/stores/useSettingsStore";
 
-interface PersonaPageProps {
-  prompts: PolishPrompt[];
-  onChange: (prompts: PolishPrompt[]) => void;
-  selectedPromptId: string;
-  onSelectPrompt: (id: string) => void;
-  enabled: boolean;
-  onEnabledChange: (enabled: boolean) => void;
-}
+export function PersonaPage() {
+  const { polishSettings, setPolishEnabled, setSelectedPromptId, updatePolishPrompts } = useSettingsStore();
+  const { prompts, selectedPromptId, enabled } = polishSettings;
 
-export function PersonaPage({
-  prompts,
-  onChange,
-  selectedPromptId,
-  onSelectPrompt,
-  enabled,
-  onEnabledChange,
-}: PersonaPageProps) {
   const [activeId, setActiveId] = useState<string>(
     prompts[0]?.id ?? ""
   );
@@ -39,7 +26,7 @@ export function PersonaPage({
   const isBuiltin = (id: string) => builtinPromptIds.has(id);
 
   const updatePrompt = (id: string, data: Partial<Omit<PolishPrompt, "id">>) => {
-    onChange(prompts.map((p) => (p.id === id ? { ...p, ...data } : p)));
+    updatePolishPrompts(prompts.map((p) => (p.id === id ? { ...p, ...data } : p)));
   };
 
   const startEditName = () => {
@@ -81,12 +68,12 @@ export function PersonaPage({
   };
 
   const handleCreate = () => {
-    const newPrompt: PolishPrompt = {
+    const newPrompt = {
       id: crypto.randomUUID(),
       name: "新人设",
       content: "请将以下口语化的文字转换为书面语，只输出润色后的文字。",
     };
-    onChange([...prompts, newPrompt]);
+    updatePolishPrompts([...prompts, newPrompt]);
     setActiveId(newPrompt.id);
     setEditingName(false);
     setEditingContent(false);
@@ -103,7 +90,7 @@ export function PersonaPage({
   const handleDelete = (id: string) => {
     const idx = prompts.findIndex((p) => p.id === id);
     const next = prompts.filter((p) => p.id !== id);
-    onChange(next);
+    updatePolishPrompts(next);
     setDeletingId(null);
     if (activeId === id && next.length > 0) {
       const newIdx = Math.min(idx, next.length - 1);
@@ -117,7 +104,7 @@ export function PersonaPage({
       <div className="flex items-center justify-between px-6 py-3 shrink-0">
         <div className="flex items-center gap-3">
           <h2 className="text-base font-semibold">设置您的人设</h2>
-          <Switch checked={enabled} onCheckedChange={onEnabledChange} />
+          <Switch checked={enabled} onCheckedChange={setPolishEnabled} />
         </div>
         <Button variant="outline" size="sm" onClick={handleCreate}>
           <Plus className="size-4 mr-1" />
@@ -191,7 +178,7 @@ export function PersonaPage({
                 ) : (
                   <Button
                     size="sm"
-                    onClick={() => onSelectPrompt(activePrompt.id)}
+                    onClick={() => setSelectedPromptId(activePrompt.id)}
                   >
                     使用该人设
                   </Button>

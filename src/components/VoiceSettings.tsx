@@ -14,14 +14,12 @@ import {
 } from "@/components/ui/select";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Check, Plug, Eye, EyeOff, ExternalLink } from "lucide-react";
-import { builtinAsrProviders, type AsrSettings, type AsrProviderMeta, type AsrProviderType } from "@/types/asr";
+import { builtinAsrProviders, type AsrProviderMeta, type AsrProviderType } from "@/types/asr";
+import { useSettingsStore } from "@/stores/useSettingsStore";
 
-interface VoiceSettingsProps {
-  settings: AsrSettings;
-  onUpdate: (next: AsrSettings) => void;
-}
+export function VoiceSettings() {
+  const { asrSettings, updateAsrSettings } = useSettingsStore();
 
-export function VoiceSettings({ settings, onUpdate }: VoiceSettingsProps) {
   const [activeType, setActiveType] = useState<AsrProviderType>(
     builtinAsrProviders[0]?.type ?? ("" as AsrProviderType)
   );
@@ -32,13 +30,13 @@ export function VoiceSettings({ settings, onUpdate }: VoiceSettingsProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const activeMeta = builtinAsrProviders.find((p) => p.type === activeType);
-  const activeConfig = settings.providers[activeType] ?? {};
+  const activeConfig = asrSettings.providers[activeType] ?? {};
 
   const updateConfig = (key: string, value: string) => {
-    onUpdate({
-      ...settings,
+    updateAsrSettings({
+      ...asrSettings,
       providers: {
-        ...settings.providers,
+        ...asrSettings.providers,
         [activeType]: { ...activeConfig, [key]: value },
       },
     });
@@ -58,14 +56,14 @@ export function VoiceSettings({ settings, onUpdate }: VoiceSettingsProps) {
   };
 
   const isConfigured = (meta: AsrProviderMeta): boolean => {
-    const config = settings.providers[meta.type] ?? {};
+    const config = asrSettings.providers[meta.type] ?? {};
     return meta.fields
       .filter((f) => f.required)
       .every((f) => config[f.key]?.trim());
   };
 
   const handleTestConnection = async (meta: AsrProviderMeta) => {
-    const config = settings.providers[meta.type] ?? {};
+    const config = asrSettings.providers[meta.type] ?? {};
     if (!isConfigured(meta)) {
       toast.error("请先配置认证信息");
       return;
@@ -89,7 +87,7 @@ export function VoiceSettings({ settings, onUpdate }: VoiceSettingsProps) {
       toast.error("请先配置认证信息");
       return;
     }
-    onUpdate({ ...settings, selectedProvider: meta.type });
+    updateAsrSettings({ ...asrSettings, selectedProvider: meta.type });
   };
 
   const renderField = (field: AsrProviderMeta["fields"][number]) => {
@@ -201,7 +199,7 @@ export function VoiceSettings({ settings, onUpdate }: VoiceSettingsProps) {
                 {meta.name}
               </span>
               <span className="block text-[11px] mt-0.5 min-h-[1em]">
-                {settings.selectedProvider === meta.type ? (
+                {asrSettings.selectedProvider === meta.type ? (
                   <span className="bg-foreground text-background rounded px-1 py-0.5">使用中</span>
                 ) : !isConfigured(meta) ? (
                   <span className="text-muted-foreground">未配置</span>
@@ -220,7 +218,7 @@ export function VoiceSettings({ settings, onUpdate }: VoiceSettingsProps) {
                 {activeMeta.name}
               </h2>
               <div className="flex items-center gap-2 ml-auto">
-                {settings.selectedProvider === activeMeta.type ? (
+                {asrSettings.selectedProvider === activeMeta.type ? (
                   <Button variant="outline" size="sm" disabled>
                     <Check className="size-4 mr-1" />
                     使用中

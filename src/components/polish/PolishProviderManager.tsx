@@ -7,20 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Plus, Trash2, Check, Plug, Eye, EyeOff } from "lucide-react";
 import type { PolishProvider } from "@/types/polish";
+import { useSettingsStore } from "@/stores/useSettingsStore";
 
-interface PolishProviderManagerProps {
-  providers: PolishProvider[];
-  onChange: (providers: PolishProvider[]) => void;
-  selectedProviderId: string;
-  onSelectProvider: (id: string) => void;
-}
+export function PolishProviderManager() {
+  const { polishSettings, updatePolishProviders, setSelectedProviderId } = useSettingsStore();
+  const { providers, selectedProviderId } = polishSettings;
 
-export function PolishProviderManager({
-  providers,
-  onChange,
-  selectedProviderId,
-  onSelectProvider,
-}: PolishProviderManagerProps) {
   const [activeId, setActiveId] = useState<string>(
     providers[0]?.id ?? ""
   );
@@ -34,7 +26,7 @@ export function PolishProviderManager({
   const activeProvider = providers.find((p) => p.id === activeId);
 
   const updateProvider = (id: string, data: Partial<Omit<PolishProvider, "id">>) => {
-    onChange(providers.map((p) => (p.id === id ? { ...p, ...data } : p)));
+    updatePolishProviders(providers.map((p) => (p.id === id ? { ...p, ...data } : p)));
   };
 
   const startEdit = (field: string, value: string) => {
@@ -59,7 +51,7 @@ export function PolishProviderManager({
       model: "",
       temperature: 0.7,
     };
-    onChange([...providers, newProvider]);
+    updatePolishProviders([...providers, newProvider]);
     setActiveId(newProvider.id);
     setEditingField(null);
     requestAnimationFrame(() => {
@@ -74,7 +66,7 @@ export function PolishProviderManager({
   const handleDelete = (id: string) => {
     const idx = providers.findIndex((p) => p.id === id);
     const next = providers.filter((p) => p.id !== id);
-    onChange(next);
+    updatePolishProviders(next);
     setDeletingId(null);
     if (activeId === id && next.length > 0) {
       const newIdx = Math.min(idx, next.length - 1);
@@ -207,7 +199,7 @@ export function PolishProviderManager({
                 ) : (
                   <Button
                     size="sm"
-                    onClick={() => onSelectProvider(activeProvider.id)}
+                    onClick={() => setSelectedProviderId(activeProvider.id)}
                   >
                     使用该供应商
                   </Button>

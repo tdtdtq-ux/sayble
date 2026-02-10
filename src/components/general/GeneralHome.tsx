@@ -15,14 +15,10 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { RefreshCw } from "lucide-react";
 import type { AppSettings, AudioDevice } from "@/types/settings";
+import { useSettingsStore } from "@/stores/useSettingsStore";
 
-interface GeneralHomeProps {
-  settings: AppSettings;
-  onUpdate: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void;
-  onAutostartWarning?: (source: string | null) => void;
-}
-
-export function GeneralHome({ settings, onUpdate, onAutostartWarning }: GeneralHomeProps) {
+export function GeneralHome() {
+  const { appSettings, updateAppSetting, setAutostartWarning } = useSettingsStore();
   const [devices, setDevices] = useState<AudioDevice[]>([]);
 
   const loadDevices = async () => {
@@ -47,8 +43,8 @@ export function GeneralHome({ settings, onUpdate, onAutostartWarning }: GeneralH
         <div className="flex items-center gap-4">
           <Label htmlFor="outputMode" className="shrink-0 w-20">输出方式</Label>
           <Select
-            value={settings.outputMode}
-            onValueChange={(v) => onUpdate("outputMode", v as AppSettings["outputMode"])}
+            value={appSettings.outputMode}
+            onValueChange={(v) => updateAppSetting("outputMode", v as AppSettings["outputMode"])}
           >
             <SelectTrigger id="outputMode" className="flex-1">
               <SelectValue />
@@ -62,8 +58,8 @@ export function GeneralHome({ settings, onUpdate, onAutostartWarning }: GeneralH
         <div className="flex items-center gap-4">
           <Label htmlFor="microphone" className="shrink-0 w-20">麦克风</Label>
           <Select
-            value={settings.microphoneDevice || "default"}
-            onValueChange={(v) => onUpdate("microphoneDevice", v === "default" ? "" : v)}
+            value={appSettings.microphoneDevice || "default"}
+            onValueChange={(v) => updateAppSetting("microphoneDevice", v === "default" ? "" : v)}
           >
             <SelectTrigger id="microphone" className="flex-1">
               <SelectValue placeholder="选择麦克风" />
@@ -86,27 +82,27 @@ export function GeneralHome({ settings, onUpdate, onAutostartWarning }: GeneralH
           <Label htmlFor="autoOutput">自动输出（识别完成后直接粘贴）</Label>
           <Switch
             id="autoOutput"
-            checked={settings.autoOutput}
-            onCheckedChange={(v) => onUpdate("autoOutput", v)}
+            checked={appSettings.autoOutput}
+            onCheckedChange={(v) => updateAppSetting("autoOutput", v)}
           />
         </div>
         <div className="flex items-center justify-between">
           <Label htmlFor="autoStart">开机自启</Label>
           <div className="flex items-center gap-2">
-            {settings.autoStart && (
+            {appSettings.autoStart && (
               <button
                 type="button"
                 onClick={async () => {
                   try {
                     const result = await invoke<string | null>("cmd_check_autostart");
                     if (result) {
-                      onAutostartWarning?.(result);
+                      setAutostartWarning(result);
                     } else {
-                      onAutostartWarning?.(null);
+                      setAutostartWarning(null);
                       toast.success("自启动状态正常");
                     }
                   } catch {
-                    onAutostartWarning?.(null);
+                    setAutostartWarning(null);
                   }
                 }}
                 className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
@@ -116,8 +112,8 @@ export function GeneralHome({ settings, onUpdate, onAutostartWarning }: GeneralH
             )}
             <Switch
               id="autoStart"
-              checked={settings.autoStart}
-              onCheckedChange={(v) => onUpdate("autoStart", v)}
+              checked={appSettings.autoStart}
+              onCheckedChange={(v) => updateAppSetting("autoStart", v)}
             />
           </div>
         </div>

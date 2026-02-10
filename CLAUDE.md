@@ -38,19 +38,16 @@ React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 多窗口架构，通过 URL 参数 `?window=floating` 区分窗口类型：
 
 - **main.tsx** → 入口，根据 URL 参数渲染 `<App />` 或 `<FloatingApp />`
-- **App.tsx** → 主窗口根组件，纯设置界面容器（不参与录音控制）
-- **Settings.tsx** — 设置页框架（左侧菜单 + 数据加载/保存 + tab 路由），统一管理所有设置状态，菜单项：ASR识别 / LLM润色 / 通用 / 关于
-- **VoiceSettings.tsx** — 语音设置 tab（火山引擎 API 配置、语言、自动标点、连接测试）
+- **App.tsx** → 主窗口根组件，页面路由（Dashboard / Settings）、自启动检测、警告条展示。挂载时调用 `useSettingsStore.getState().loadSettings()` 加载全局设置
+- **Dashboard.tsx** — 首页框架（左侧菜单 + 首页/人设切换）
+- **Settings.tsx** — 设置页框架（左侧菜单 + tab 路由），菜单项：ASR管理 / LLM管理 / 通用 / 关于
+- **VoiceSettings.tsx** — ASR管理（内建供应商列表、左右分栏内联编辑、连接测试）
 - **GeneralSettings.tsx** — 通用设置 tab 框架（Tabs 路由：首页 / 快捷键 / 数据）
 - **general/GeneralHome.tsx** — 通用首页 tab（输出方式、麦克风、自动输出、自启动）
 - **general/HotkeySettings.tsx** — 快捷键 tab（切换模式、长按模式）
 - **general/DataSettings.tsx** — 数据 tab（设置文件路径、日志路径、打开文件夹）
-- **polish/PolishSettings.tsx** — 润色设置 tab（供应商、Prompt、开关）
-- **polish/PolishHome.tsx** — 润色首页（开关、供应商/Prompt 选择）
-- **polish/PolishProviderManager.tsx** — 供应商列表管理（Dialog 弹窗编辑，测试连接，复制供应商，选中标记）
-- **polish/PolishProviderForm.tsx** — 供应商表单（OpenAI 兼容 API 配置，含 temperature 滑块）
-- **polish/PolishPromptManager.tsx** — Prompt 模板列表管理（Dialog 弹窗编辑，选中标记，内建标识）
-- **polish/PolishPromptForm.tsx** — Prompt 模板表单
+- **polish/PolishProviderManager.tsx** — LLM供应商管理（左右分栏内联编辑，测试连接，选中标记）
+- **PersonaPage.tsx** — 人设管理（Prompt 列表左右分栏内联编辑，选中标记，内建标识）
 - **FloatingApp.tsx** — 浮窗入口，独立窗口，监听 ASR 事件（带 sessionId 过滤）和 floating-control 事件，纯状态展示（不参与文字输出）
 - **FloatingWindow.tsx** — 浮窗 UI 组件（录音状态指示、实时识别文字、计时器）
 - **HomePage.tsx** — 主窗口首页（使用统计卡片、识别历史列表、详情弹窗、分页、清空）
@@ -59,7 +56,11 @@ React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 
 路径别名：`@/*` → `./src/*`
 
-无全局状态管理库，使用 React hooks 管理状态。设置持久化通过后端 IPC（`cmd_load_settings` / `cmd_save_settings`）全量读写 `settings.json`，前端不直接操作 store。跨窗口通信使用 Tauri 事件系统。
+使用 [Zustand](https://github.com/pmndrs/zustand) 进行全局状态管理。核心 store：
+
+- **`src/stores/useSettingsStore.ts`** — 统一管理 `appSettings`、`asrSettings`、`polishSettings` 及 UI 状态（`autostartWarning`）。所有写操作触发同一个 500ms 防抖 `debouncedSave()`，全量序列化到后端 `cmd_save_settings`。`loadSettings()` 在 App.tsx 挂载时调用一次，内部有 `loaded` 标志防重。
+
+设置持久化通过后端 IPC（`cmd_load_settings` / `cmd_save_settings`）全量读写 `settings.json`。跨窗口通信使用 Tauri 事件系统。
 
 #### 录音状态管理
 

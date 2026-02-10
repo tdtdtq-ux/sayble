@@ -2,14 +2,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { HotkeyRecorder } from "../HotkeyRecorder";
-import type { AppSettings } from "@/types/settings";
+import { useSettingsStore } from "@/stores/useSettingsStore";
 
-interface HotkeySettingsProps {
-  settings: AppSettings;
-  onUpdate: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void;
-}
+export function HotkeySettings() {
+  const { appSettings, updateAppSetting } = useSettingsStore();
 
-export function HotkeySettings({ settings, onUpdate }: HotkeySettingsProps) {
   return (
     <Card>
       <CardHeader>
@@ -20,16 +17,16 @@ export function HotkeySettings({ settings, onUpdate }: HotkeySettingsProps) {
         <div className="space-y-2">
           <Label>切换模式（按一次开始，再按一次停止）</Label>
           <HotkeyRecorder
-            value={settings.toggleHotkey}
-            onChange={(v) => onUpdate("toggleHotkey", v)}
+            value={appSettings.toggleHotkey}
+            onChange={(v) => updateAppSetting("toggleHotkey", v)}
           />
         </div>
         <Separator />
         <div className="space-y-2">
           <Label>长按模式（按住录音，松开停止）</Label>
           <HotkeyRecorder
-            value={settings.holdHotkey}
-            onChange={(v) => onUpdate("holdHotkey", v)}
+            value={appSettings.holdHotkey}
+            onChange={(v) => updateAppSetting("holdHotkey", v)}
           />
         </div>
       </CardContent>
