@@ -39,7 +39,10 @@ React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 
 - **main.tsx** → 入口，根据 URL 参数渲染 `<App />` 或 `<FloatingApp />`
 - **App.tsx** → 主窗口根组件，纯设置界面容器（不参与录音控制）
-- **Settings.tsx** — 主设置界面（API 配置、热键配置、输出模式、麦克风选择等）
+- **Settings.tsx** — 设置页框架（左侧菜单 + 数据加载/保存 + tab 路由），统一管理所有设置状态
+- **VoiceSettings.tsx** — 语音设置 tab（火山引擎 API 配置、语言、自动标点、连接测试）
+- **GeneralSettings.tsx** — 通用设置 tab（输出方式、麦克风、自动输出、自启动、快捷键）
+- **polish/PolishSettings.tsx** — 润色设置 tab（供应商、Prompt、开关）
 - **FloatingApp.tsx** — 浮窗入口，独立窗口，监听 ASR 事件（带 sessionId 过滤）和 floating-control 事件，管理文字输出
 - **FloatingWindow.tsx** — 浮窗 UI 组件（录音状态指示、实时识别文字、计时器）
 - **HotkeyRecorder.tsx** — 快捷键录制组件
