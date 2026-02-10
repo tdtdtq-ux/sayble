@@ -17,6 +17,133 @@ use tauri::{Emitter, Manager};
 use tauri_plugin_store::StoreExt;
 use tauri_plugin_autostart::ManagerExt;
 
+/// 检查自启动注册表项是否被第三方软件（如 QQ、360 等）禁用
+/// 返回禁用该项的子键名称（如 "QQDisabled"），未被禁用则返回 None
+#[cfg(target_os = "windows")]
+fn check_autostart_hijacked() -> Option<String> {
+    use windows::Win32::System::Registry::*;
+    use windows::core::*;
+
+    // 常见的第三方软件禁用自启动时使用的子键名
+    let disabled_subkeys = [
+        "QQDisabled",
+        "360Disabled",
+        "KingsoftDisabled",
+        "TencentDisabled",
+    ];
+
+    let run_path = w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
+
+    for subkey_name in &disabled_subkeys {
+        let subkey_path = format!(
+            "Software\\Microsoft\\Windows\\CurrentVersion\\Run\\{}",
+            subkey_name
+        );
+        let wide: Vec<u16> = subkey_path.encode_utf16().chain(std::iter::once(0)).collect();
+        let subkey_pcwstr = PCWSTR(wide.as_ptr());
+
+        let mut hkey = HKEY::default();
+        let result = unsafe {
+            RegOpenKeyExW(
+                HKEY_CURRENT_USER,
+                subkey_pcwstr,
+                0,
+                KEY_READ,
+                &mut hkey,
+            )
+        };
+
+        if result.is_ok() {
+            // 子键存在，检查是否有 Sayble 值
+            let value_name = w!("Sayble");
+            let query_result = unsafe {
+                RegQueryValueExW(
+                    hkey,
+                    value_name,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+            };
+            unsafe { let _ = RegCloseKey(hkey); }
+
+            if query_result.is_ok() {
+                log::warn!(
+                    "[autostart] Sayble found in Run\\{} — autostart was hijacked by third-party software",
+                    subkey_name
+                );
+                return Some(subkey_name.to_string());
+            }
+        }
+    }
+
+    // 兜底：检查 Run 下所有子键是否包含 Sayble（应对未知软件）
+    let mut run_hkey = HKEY::default();
+    let open_result = unsafe {
+        RegOpenKeyExW(HKEY_CURRENT_USER, run_path, 0, KEY_READ, &mut run_hkey)
+    };
+    if open_result.is_ok() {
+        let mut index = 0u32;
+        loop {
+            let mut name_buf = [0u16; 256];
+            let mut name_len = name_buf.len() as u32;
+            let enum_result = unsafe {
+                RegEnumKeyExW(
+                    run_hkey,
+                    index,
+                    PWSTR(name_buf.as_mut_ptr()),
+                    &mut name_len,
+                    None,
+                    PWSTR::null(),
+                    None,
+                    None,
+                )
+            };
+            if enum_result.is_err() {
+                break;
+            }
+            let child_name = String::from_utf16_lossy(&name_buf[..name_len as usize]);
+
+            // 已经在上面检查过的跳过
+            if disabled_subkeys.contains(&child_name.as_str()) {
+                index += 1;
+                continue;
+            }
+
+            let child_path = format!(
+                "Software\\Microsoft\\Windows\\CurrentVersion\\Run\\{}",
+                child_name
+            );
+            let wide2: Vec<u16> = child_path.encode_utf16().chain(std::iter::once(0)).collect();
+            let child_pcwstr = PCWSTR(wide2.as_ptr());
+            let mut child_hkey = HKEY::default();
+            let child_open = unsafe {
+                RegOpenKeyExW(HKEY_CURRENT_USER, child_pcwstr, 0, KEY_READ, &mut child_hkey)
+            };
+            if child_open.is_ok() {
+                let value_name = w!("Sayble");
+                let q = unsafe {
+                    RegQueryValueExW(child_hkey, value_name, None, None, None, None)
+                };
+                unsafe { let _ = RegCloseKey(child_hkey); }
+                if q.is_ok() {
+                    log::warn!(
+                        "[autostart] Sayble found in Run\\{} — autostart was hijacked by unknown software",
+                        child_name
+                    );
+                    unsafe { let _ = RegCloseKey(run_hkey); }
+                    return Some(child_name);
+                }
+            }
+            index += 1;
+        }
+        unsafe { let _ = RegCloseKey(run_hkey); }
+    }
+
+    None
+}
+
 /// 录音状态标志，用于 start/stop 之间通信
 /// session_id 用于防止旧线程清理时覆盖新录音的状态
 struct RecordingFlag {
@@ -147,6 +274,15 @@ pub fn run() {
                         log::error!("[autostart] failed to disable on setup: {}", e);
                     } else {
                         log::info!("[autostart] disabled on setup (was enabled)");
+                    }
+                }
+
+                // 检测自启动是否被第三方软件劫持（仅在用户开启了自启动时检测）
+                #[cfg(target_os = "windows")]
+                if want_enabled {
+                    if let Some(hijacker) = check_autostart_hijacked() {
+                        log::warn!("[autostart] hijacked by: {}", hijacker);
+                        let _ = handle.emit("autostart-hijacked", hijacker);
                     }
                 }
             }
