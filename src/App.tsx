@@ -2,11 +2,14 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { HomePage } from "@/components/HomePage";
 import { Settings, type SettingsHandle } from "@/components/Settings";
 import { Toaster } from "@/components/ui/sonner";
 
 function App() {
   const settingsRef = useRef<SettingsHandle>(null);
+  const [page, setPage] = useState<"home" | "settings">("home");
+  const [pendingShowAbout, setPendingShowAbout] = useState(false);
   const [autostartWarning, setAutostartWarning] = useState<string | null>(null);
   const [flash, setFlash] = useState(false);
   const warningRef = useRef<HTMLDivElement>(null);
@@ -18,7 +21,14 @@ function App() {
 
     listen("show-about", () => {
       if (cancelled) return;
-      settingsRef.current?.showAbout();
+      if (settingsRef.current) {
+        // 已在设置页，直接切换 tab
+        settingsRef.current.showAbout();
+      } else {
+        // 从首页切换，标记待执行，等 Settings 挂载后触发
+        setPage("settings");
+        setPendingShowAbout(true);
+      }
     }).then((fn) => {
       if (cancelled) {
         fn();
@@ -32,6 +42,14 @@ function App() {
       unlisten?.();
     };
   }, []);
+
+  // Settings 挂载后消费 pendingShowAbout
+  useEffect(() => {
+    if (pendingShowAbout && settingsRef.current) {
+      settingsRef.current.showAbout();
+      setPendingShowAbout(false);
+    }
+  }, [pendingShowAbout, page]);
 
   // 检测自启动状态
   const checkAutostart = useCallback(() => {
@@ -98,10 +116,15 @@ function App() {
         </div>
       )}
       <div className="flex-1 min-h-0">
-        <Settings
-          ref={settingsRef}
-          onAutostartWarning={handleAutostartWarning}
-        />
+        {page === "home" ? (
+          <HomePage onOpenSettings={() => setPage("settings")} />
+        ) : (
+          <Settings
+            ref={settingsRef}
+            onBack={() => setPage("home")}
+            onAutostartWarning={handleAutostartWarning}
+          />
+        )}
       </div>
       <Toaster position="top-center" duration={1500} />
     </div>

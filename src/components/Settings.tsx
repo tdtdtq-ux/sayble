@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useImperativeHandle, useRef, type Ref } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { toast } from "sonner";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,26 +13,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { HotkeyRecorder } from "./HotkeyRecorder";
-import { AppIcon } from "./AppIcon";
 import { About } from "./About";
-import { Key, Keyboard, Settings2, Info, Plug, RefreshCw, Home, Type, Clock, Hash, Eye, EyeOff } from "lucide-react";
-
-function formatStatsDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  if (hours > 0) {
-    return `${hours}h ${minutes}m ${seconds}s`;
-  }
-  if (minutes > 0) {
-    return `${minutes}m ${seconds}s`;
-  }
-  return `${seconds}s`;
-}
+import { Mic, Settings2, Info, Plug, RefreshCw, Eye, EyeOff, ArrowLeft } from "lucide-react";
 
 interface AudioDevice {
   name: string;
@@ -72,49 +55,25 @@ export interface SettingsHandle {
 
 interface SettingsProps {
   ref?: Ref<SettingsHandle>;
+  onBack?: () => void;
   onAutostartWarning?: (source: string | null) => void;
 }
 
-export function Settings({ ref, onAutostartWarning }: SettingsProps) {
+const menuItems = [
+  { key: "voice", label: "语音", icon: Mic },
+  { key: "general", label: "通用", icon: Settings2 },
+  { key: "about", label: "关于", icon: Info },
+] as const;
+
+type TabKey = (typeof menuItems)[number]["key"];
+
+export function Settings({ ref, onBack, onAutostartWarning }: SettingsProps) {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [showAccessKey, setShowAccessKey] = useState(false);
-  const [activeTab, setActiveTab] = useState("home");
-
-  // 切到首页时刷新统计数据
-  useEffect(() => {
-    if (activeTab === "home") {
-      loadStats();
-    }
-  }, [activeTab]);
-
-  // 监听 ASR 完成事件，自动刷新统计
-  useEffect(() => {
-    let cancelled = false;
-    let unlisten: (() => void) | null = null;
-
-    listen<{ event: string | object }>("asr-event", (ev) => {
-      if (cancelled) return;
-      const { event } = ev.payload;
-      if (event === "Finished") {
-        loadStats();
-      }
-    }).then((fn) => {
-      if (cancelled) {
-        fn();
-      } else {
-        unlisten = fn;
-      }
-    });
-
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, []);
-  const [stats, setStats] = useState<{ totalDurationMs: number; totalChars: number; totalCount: number } | null>(null);
+  const [activeTab, setActiveTab] = useState<TabKey>("voice");
 
   useImperativeHandle(ref, () => ({
     showAbout: () => setActiveTab("about"),
@@ -123,7 +82,6 @@ export function Settings({ ref, onAutostartWarning }: SettingsProps) {
   useEffect(() => {
     loadDevices();
     loadSettings();
-    loadStats();
   }, []);
 
   const loadSettings = async () => {
@@ -146,25 +104,14 @@ export function Settings({ ref, onAutostartWarning }: SettingsProps) {
     }
   };
 
-  const loadStats = async () => {
-    try {
-      const result = await invoke<{ totalDurationMs: number; totalChars: number; totalCount: number }>("cmd_load_stats");
-      setStats(result);
-    } catch (e) {
-      console.error("Failed to load stats:", e);
-    }
-  };
-
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 组件卸载时清理防抖定时器
   useEffect(() => {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, []);
 
-  // 自动保存：settings 变化后防抖 500ms 自动写入
   const saveSettings = useCallback((newSettings: AppSettings) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
@@ -207,253 +154,233 @@ export function Settings({ ref, onAutostartWarning }: SettingsProps) {
   };
 
   return (
-    <div className="mx-auto max-w-2xl h-full flex flex-col">
-      <div className="shrink-0 px-6 pt-6 pb-4">
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-              <AppIcon className="size-6" />
-              Sayble
-            </h1>
-          </div>
+    <div className="h-full flex">
+      {/* 左侧菜单 */}
+      <nav className="shrink-0 w-36 border-r px-3 pt-6 pb-3 flex flex-col gap-1">
+        <div className="flex items-center gap-2 px-3 pb-4">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="size-8 rounded-md hover:bg-muted flex items-center justify-center transition-colors"
+            >
+              <ArrowLeft className="size-5" />
+            </button>
+          )}
+          <h1 className="text-lg font-bold tracking-tight">设置</h1>
         </div>
+        {menuItems.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors text-left ${
+              activeTab === key
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+            }`}
+          >
+            <Icon className="size-4 shrink-0" />
+            {label}
+          </button>
+        ))}
+      </nav>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-0">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="home"><Home className="size-4 mr-1.5" />首页</TabsTrigger>
-            <TabsTrigger value="api"><Key className="size-4 mr-1.5" />API 配置</TabsTrigger>
-            <TabsTrigger value="hotkey"><Keyboard className="size-4 mr-1.5" />快捷键</TabsTrigger>
-            <TabsTrigger value="general"><Settings2 className="size-4 mr-1.5" />通用</TabsTrigger>
-            <TabsTrigger value="about"><Info className="size-4 mr-1.5" />关于</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-6 pb-6">
-          {activeTab === "home" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>使用统计</CardTitle>
-              <CardDescription>语音识别累计使用数据</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="flex flex-col items-center gap-2 rounded-lg border p-4">
-                  <Hash className="size-5 text-muted-foreground" />
-                  <span className="text-2xl font-bold">{stats?.totalCount ?? 0}</span>
-                  <span className="text-sm text-muted-foreground">识别次数</span>
-                </div>
-                <div className="flex flex-col items-center gap-2 rounded-lg border p-4">
-                  <Type className="size-5 text-muted-foreground" />
-                  <span className="text-2xl font-bold">{stats?.totalChars ?? 0}</span>
-                  <span className="text-sm text-muted-foreground">识别字数</span>
-                </div>
-                <div className="flex flex-col items-center gap-2 rounded-lg border p-4">
-                  <Clock className="size-5 text-muted-foreground" />
-                  <span className="text-2xl font-bold">{formatStatsDuration(stats?.totalDurationMs ?? 0)}</span>
-                  <span className="text-sm text-muted-foreground">录音时长</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          )}
-
-          {activeTab === "api" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>火山引擎语音识别</CardTitle>
-              <CardDescription>配置火山引擎 ASR 服务的认证信息</CardDescription>
-              <CardAction>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleTestConnection}
-                  disabled={testing}
-                >
-                  <Plug className="size-4 mr-1.5" />
-                  {testing ? "测试中..." : "测试连接"}
-                </Button>
-              </CardAction>
-              {testResult && (
-                <p className="text-sm text-muted-foreground">{testResult}</p>
-              )}
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-4">
-                <Label htmlFor="appId" className="shrink-0 w-20">App ID</Label>
-                <Input
-                  id="appId"
-                  placeholder="输入 App ID"
-                  value={settings.appId}
-                  onChange={(e) => updateSetting("appId", e.target.value)}
-                  className="flex-1"
-                />
-              </div>
-              <div className="flex items-center gap-4">
-                <Label htmlFor="accessKey" className="shrink-0 w-20">Access Key</Label>
-                <div className="relative flex-1">
-                  <Input
-                    id="accessKey"
-                    type={showAccessKey ? "text" : "password"}
-                    placeholder="输入 Access Key"
-                    value={settings.accessKey}
-                    onChange={(e) => updateSetting("accessKey", e.target.value)}
-                    className="pr-9"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowAccessKey((v) => !v)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+      {/* 右侧内容区 */}
+      <div className="flex-1 min-w-0 overflow-y-auto custom-scrollbar px-6 pt-6 pb-6">
+          {activeTab === "voice" && (
+            <Card>
+              <CardHeader>
+                <CardTitle>火山引擎语音识别</CardTitle>
+                <CardDescription>配置火山引擎 ASR 服务的认证信息</CardDescription>
+                <CardAction>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleTestConnection}
+                    disabled={testing}
                   >
-                    {showAccessKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                  </button>
+                    <Plug className="size-4 mr-1.5" />
+                    {testing ? "测试中..." : "测试连接"}
+                  </Button>
+                </CardAction>
+                {testResult && (
+                  <p className="text-sm text-muted-foreground">{testResult}</p>
+                )}
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <Label htmlFor="appId" className="shrink-0 w-20">App ID</Label>
+                  <Input
+                    id="appId"
+                    placeholder="输入 App ID"
+                    value={settings.appId}
+                    onChange={(e) => updateSetting("appId", e.target.value)}
+                    className="flex-1"
+                  />
                 </div>
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between">
-                <Label htmlFor="language">识别语言</Label>
-                <Select
-                  value={settings.language}
-                  onValueChange={(v) => updateSetting("language", v)}
-                >
-                  <SelectTrigger id="language" className="w-36">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="zh">中文</SelectItem>
-                    <SelectItem value="en">英文</SelectItem>
-                    <SelectItem value="auto">自动检测</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="autoPunctuation">自动标点</Label>
-                <Switch
-                  id="autoPunctuation"
-                  checked={settings.autoPunctuation}
-                  onCheckedChange={(v) => updateSetting("autoPunctuation", v)}
-                />
-              </div>
-            </CardContent>
-          </Card>
-          )}
-
-          {activeTab === "hotkey" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>快捷键配置</CardTitle>
-              <CardDescription>支持区分左右修饰键（左Ctrl / 右Ctrl 等）</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label>切换模式（按一次开始，再按一次停止）</Label>
-                <HotkeyRecorder
-                  value={settings.toggleHotkey}
-                  onChange={(v) => updateSetting("toggleHotkey", v)}
-                />
-              </div>
-              <Separator />
-              <div className="space-y-2">
-                <Label>长按模式（按住录音，松开停止）</Label>
-                <HotkeyRecorder
-                  value={settings.holdHotkey}
-                  onChange={(v) => updateSetting("holdHotkey", v)}
-                />
-              </div>
-            </CardContent>
-          </Card>
+                <div className="flex items-center gap-4">
+                  <Label htmlFor="accessKey" className="shrink-0 w-20">Access Key</Label>
+                  <div className="relative flex-1">
+                    <Input
+                      id="accessKey"
+                      type={showAccessKey ? "text" : "password"}
+                      placeholder="输入 Access Key"
+                      value={settings.accessKey}
+                      onChange={(e) => updateSetting("accessKey", e.target.value)}
+                      className="pr-9"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAccessKey((v) => !v)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showAccessKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  </div>
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="language">识别语言</Label>
+                  <Select
+                    value={settings.language}
+                    onValueChange={(v) => updateSetting("language", v)}
+                  >
+                    <SelectTrigger id="language" className="w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="zh">中文</SelectItem>
+                      <SelectItem value="en">英文</SelectItem>
+                      <SelectItem value="auto">自动检测</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="autoPunctuation">自动标点</Label>
+                  <Switch
+                    id="autoPunctuation"
+                    checked={settings.autoPunctuation}
+                    onCheckedChange={(v) => updateSetting("autoPunctuation", v)}
+                  />
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {activeTab === "general" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>通用设置</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-4">
-                <Label htmlFor="outputMode" className="shrink-0 w-20">输出方式</Label>
-                <Select
-                  value={settings.outputMode}
-                  onValueChange={(v) => updateSetting("outputMode", v as AppSettings["outputMode"])}
-                >
-                  <SelectTrigger id="outputMode" className="flex-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Clipboard">剪贴板粘贴</SelectItem>
-                    <SelectItem value="SimulateKeyboard">模拟键盘输入</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-4">
-                <Label htmlFor="microphone" className="shrink-0 w-20">麦克风</Label>
-                <Select
-                  value={settings.microphoneDevice || "default"}
-                  onValueChange={(v) => updateSetting("microphoneDevice", v === "default" ? "" : v)}
-                >
-                  <SelectTrigger id="microphone" className="flex-1">
-                    <SelectValue placeholder="选择麦克风" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="default">系统默认</SelectItem>
-                    {devices.map((d) => (
-                      <SelectItem key={d.name} value={d.name}>
-                        {d.name} {d.is_default ? "(默认)" : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button variant="ghost" size="icon" onClick={loadDevices} className="shrink-0 size-9">
-                  <RefreshCw className="size-4" />
-                </Button>
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between">
-                <Label htmlFor="autoOutput">自动输出（识别完成后直接粘贴）</Label>
-                <Switch
-                  id="autoOutput"
-                  checked={settings.autoOutput}
-                  onCheckedChange={(v) => updateSetting("autoOutput", v)}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="autoStart">开机自启</Label>
-                <div className="flex items-center gap-2">
-                  {settings.autoStart && (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          const result = await invoke<string | null>("cmd_check_autostart");
-                          if (result) {
-                            onAutostartWarning?.(result);
-                          } else {
-                            onAutostartWarning?.(null);
-                            toast.success("自启动状态正常");
-                          }
-                        } catch {
-                          onAutostartWarning?.(null);
-                        }
-                      }}
-                      className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>通用设置</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <Label htmlFor="outputMode" className="shrink-0 w-20">输出方式</Label>
+                    <Select
+                      value={settings.outputMode}
+                      onValueChange={(v) => updateSetting("outputMode", v as AppSettings["outputMode"])}
                     >
-                      检测
-                    </button>
-                  )}
-                  <Switch
-                    id="autoStart"
-                    checked={settings.autoStart}
-                    onCheckedChange={(v) => updateSetting("autoStart", v)}
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                      <SelectTrigger id="outputMode" className="flex-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Clipboard">剪贴板粘贴</SelectItem>
+                        <SelectItem value="SimulateKeyboard">模拟键盘输入</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <Label htmlFor="microphone" className="shrink-0 w-20">麦克风</Label>
+                    <Select
+                      value={settings.microphoneDevice || "default"}
+                      onValueChange={(v) => updateSetting("microphoneDevice", v === "default" ? "" : v)}
+                    >
+                      <SelectTrigger id="microphone" className="flex-1">
+                        <SelectValue placeholder="选择麦克风" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">系统默认</SelectItem>
+                        {devices.map((d) => (
+                          <SelectItem key={d.name} value={d.name}>
+                            {d.name} {d.is_default ? "(默认)" : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button variant="ghost" size="icon" onClick={loadDevices} className="shrink-0 size-9">
+                      <RefreshCw className="size-4" />
+                    </Button>
+                  </div>
+                  <Separator />
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="autoOutput">自动输出（识别完成后直接粘贴）</Label>
+                    <Switch
+                      id="autoOutput"
+                      checked={settings.autoOutput}
+                      onCheckedChange={(v) => updateSetting("autoOutput", v)}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="autoStart">开机自启</Label>
+                    <div className="flex items-center gap-2">
+                      {settings.autoStart && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const result = await invoke<string | null>("cmd_check_autostart");
+                              if (result) {
+                                onAutostartWarning?.(result);
+                              } else {
+                                onAutostartWarning?.(null);
+                                toast.success("自启动状态正常");
+                              }
+                            } catch {
+                              onAutostartWarning?.(null);
+                            }
+                          }}
+                          className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
+                        >
+                          检测
+                        </button>
+                      )}
+                      <Switch
+                        id="autoStart"
+                        checked={settings.autoStart}
+                        onCheckedChange={(v) => updateSetting("autoStart", v)}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>快捷键配置</CardTitle>
+                  <CardDescription>支持区分左右修饰键（左Ctrl / 右Ctrl 等）</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-2">
+                    <Label>切换模式（按一次开始，再按一次停止）</Label>
+                    <HotkeyRecorder
+                      value={settings.toggleHotkey}
+                      onChange={(v) => updateSetting("toggleHotkey", v)}
+                    />
+                  </div>
+                  <Separator />
+                  <div className="space-y-2">
+                    <Label>长按模式（按住录音，松开停止）</Label>
+                    <HotkeyRecorder
+                      value={settings.holdHotkey}
+                      onChange={(v) => updateSetting("holdHotkey", v)}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {activeTab === "about" && <About />}
-
-      </div>
+        </div>
     </div>
   );
 }
