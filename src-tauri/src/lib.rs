@@ -977,7 +977,7 @@ fn cmd_load_stats(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
 fn cmd_get_data_dir() -> serde_json::Value {
     let base = store::base_dir();
     serde_json::json!({
-        "settings": base.to_string_lossy(),
-        "logs": base.join("logs").to_string_lossy().into_owned(),
+        "settings": base.join("settings.json").to_string_lossy().into_owned(),
+        "logs": base.join("logs").join("sayble.log").to_string_lossy().into_owned(),
     })
 }
