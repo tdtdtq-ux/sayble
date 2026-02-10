@@ -49,7 +49,7 @@ React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 - **polish/PolishHome.tsx** — 润色首页（开关、供应商/Prompt 选择）
 - **polish/PolishProviderManager.tsx** — 供应商列表管理（Dialog 弹窗编辑，测试连接，复制供应商，选中标记）
 - **polish/PolishProviderForm.tsx** — 供应商表单（OpenAI 兼容 API 配置，含 temperature 滑块）
-- **polish/PolishPromptManager.tsx** — Prompt 模板列表管理（Dialog 弹窗编辑）
+- **polish/PolishPromptManager.tsx** — Prompt 模板列表管理（Dialog 弹窗编辑，选中标记，内建标识）
 - **polish/PolishPromptForm.tsx** — Prompt 模板表单
 - **FloatingApp.tsx** — 浮窗入口，独立窗口，监听 ASR 事件（带 sessionId 过滤）和 floating-control 事件，纯状态展示（不参与文字输出）
 - **FloatingWindow.tsx** — 浮窗 UI 组件（录音状态指示、实时识别文字、计时器）

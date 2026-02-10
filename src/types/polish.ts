@@ -21,17 +21,21 @@ export interface PolishSettings {
   prompts: PolishPrompt[];
 }
 
-export const builtinPrompt: PolishPrompt = {
-  id: "builtin-oral-to-written",
-  name: "口语转书面语",
-  content:
-    "请将以下口语化的文字转换为书面语，保持原意不变，修正语法错误，使表达更加规范流畅。只输出润色后的文字，不要添加任何解释。",
-};
+export const builtinPrompts: PolishPrompt[] = [
+  {
+    id: "fix-only",
+    name: "仅修正错误",
+    content:
+      "请只修正以下文字中的错别字和语法错误，不要改变原有的语气、用词风格和表达习惯。只输出修正后的文字，不要添加任何解释。",
+  }
+];
+
+export const builtinPromptIds = new Set(builtinPrompts.map((p) => p.id));
 
 export const defaultPolishSettings: PolishSettings = {
   enabled: false,
   selectedProviderId: "",
-  selectedPromptId: builtinPrompt.id,
+  selectedPromptId: builtinPrompts[0].id,
   providers: [],
-  prompts: [builtinPrompt],
+  prompts: [...builtinPrompts],
 };

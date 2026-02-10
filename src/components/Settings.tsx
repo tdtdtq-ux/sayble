@@ -7,7 +7,7 @@ import { GeneralSettings } from "./GeneralSettings";
 import { PolishSettings } from "./polish/PolishSettings";
 import { About } from "./About";
 import { defaultSettings, type AppSettings } from "@/types/settings";
-import { defaultPolishSettings, type PolishSettings as PolishSettingsType } from "@/types/polish";
+import { defaultPolishSettings, builtinPrompts, type PolishSettings as PolishSettingsType } from "@/types/polish";
 
 export interface SettingsHandle {
   showAbout: () => void;
@@ -49,7 +49,19 @@ export function Settings({ ref, onBack, onAutostartWarning }: SettingsProps) {
           setSettings((prev) => ({ ...prev, ...(result.app_settings as Partial<AppSettings>) }));
         }
         if (result.polish_settings) {
-          setPolishSettings((prev) => ({ ...prev, ...(result.polish_settings as Partial<PolishSettingsType>) }));
+          const loaded = result.polish_settings as Partial<PolishSettingsType>;
+          setPolishSettings((prev) => {
+            const merged = { ...prev, ...loaded };
+            // 合并内建 Prompt：将代码中新增的内建模板补充到已有列表中
+            if (merged.prompts) {
+              const existingIds = new Set(merged.prompts.map((p) => p.id));
+              const missing = builtinPrompts.filter((bp) => !existingIds.has(bp.id));
+              if (missing.length > 0) {
+                merged.prompts = [...missing, ...merged.prompts];
+              }
+            }
+            return merged;
+          });
         }
       }
     } catch (e) {

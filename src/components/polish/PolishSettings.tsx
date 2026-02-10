@@ -39,7 +39,7 @@ export function PolishSettings({ settings, onChange }: PolishSettingsProps) {
         <PolishHome settings={settings} onChange={onChange} />
       </TabsContent>
       <TabsContent value="prompts">
-        <PolishPromptManager prompts={settings.prompts} onChange={handlePromptsChange} />
+        <PolishPromptManager prompts={settings.prompts} onChange={handlePromptsChange} selectedPromptId={settings.selectedPromptId} />
       </TabsContent>
       <TabsContent value="providers">
         <PolishProviderManager providers={settings.providers} onChange={handleProvidersChange} selectedProviderId={settings.selectedProviderId} />

@@ -95,7 +95,7 @@ export function PolishProviderManager({ providers, onChange, selectedProviderId 
                 <p className="font-medium text-sm">
                   {provider.name}
                   {provider.id === selectedProviderId && (
-                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 ml-1.5">使用中</Badge>
+                    <Badge className="text-[10px] px-1.5 py-0 ml-1.5 bg-primary text-primary-foreground">使用中</Badge>
                   )}
                 </p>
                 <p className="text-xs text-muted-foreground truncate">{provider.baseUrl}</p>
