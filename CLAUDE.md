@@ -42,10 +42,10 @@ React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 - **Dashboard.tsx** — 首页框架（左侧菜单 + 首页/人设切换）
 - **Settings.tsx** — 设置页框架（左侧菜单 + tab 路由），菜单项：识别引擎 / 润色引擎 / 通用 / 关于
 - **VoiceSettings.tsx** — 识别引擎（内建供应商列表、左右分栏内联编辑、连接测试）
-- **GeneralSettings.tsx** — 通用设置 tab 框架（Tabs 路由：首页 / 快捷键 / 数据）
-- **general/GeneralHome.tsx** — 通用首页 tab（输出方式、麦克风、自动输出、自启动）
-- **general/HotkeySettings.tsx** — 快捷键 tab（切换模式、长按模式）
-- **general/DataSettings.tsx** — 数据 tab（设置文件路径、日志路径、打开文件夹）
+- **GeneralSettings.tsx** — 通用设置（垂直布局：输出/快捷键/数据三个区块）
+- **general/GeneralHome.tsx** — 输出设置区块（输出方式、麦克风、自动输出、自启动）
+- **general/HotkeySettings.tsx** — 快捷键设置区块（切换模式）
+- **general/DataSettings.tsx** — 数据设置区块（设置文件路径、日志路径、打开文件夹）
 - **polish/PolishProviderManager.tsx** — LLM供应商管理（左右分栏内联编辑，测试连接，选中标记）
 - **PersonaPage.tsx** — 人设管理（Prompt 列表左右分栏内联编辑，选中标记，内建标识）
 - **FloatingApp.tsx** — 浮窗入口，独立窗口，监听 ASR 事件（带 sessionId 过滤）和 floating-control 事件，纯状态展示（不参与文字输出）

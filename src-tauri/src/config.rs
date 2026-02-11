@@ -139,19 +139,9 @@ fn key_label_to_vk(label: &str) -> Option<u32> {
     }
 }
 
-/// 快捷键触发模式
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum HotkeyMode {
-    /// 按一次开始，再按一次停止
-    Toggle,
-    /// 按住录音，松开停止
-    HoldToRecord,
-}
-
 /// 快捷键配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HotkeyConfig {
-    pub mode: HotkeyMode,
     pub binding: HotkeyBinding,
 }
 
@@ -200,7 +190,6 @@ impl Default for OutputMode {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub toggle_hotkey: HotkeyConfig,
-    pub hold_hotkey: HotkeyConfig,
     pub asr: AsrConfig,
     pub output_mode: OutputMode,
     /// 麦克风设备名（空字符串表示默认设备）
@@ -215,17 +204,9 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             toggle_hotkey: HotkeyConfig {
-                mode: HotkeyMode::Toggle,
                 binding: HotkeyBinding {
                     modifiers: vec![Modifier::RightCtrl],
                     key: 0,
-                },
-            },
-            hold_hotkey: HotkeyConfig {
-                mode: HotkeyMode::HoldToRecord,
-                binding: HotkeyBinding {
-                    modifiers: vec![Modifier::LeftCtrl],
-                    key: 0x20, // VK_SPACE
                 },
             },
             asr: AsrConfig::default(),
@@ -244,8 +225,6 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = AppConfig::default();
-        assert_eq!(config.toggle_hotkey.mode, HotkeyMode::Toggle);
-        assert_eq!(config.hold_hotkey.mode, HotkeyMode::HoldToRecord);
         assert_eq!(config.asr.language, "zh");
         assert!(config.asr.auto_punctuation);
         assert_eq!(config.output_mode, OutputMode::Clipboard);
@@ -257,7 +236,6 @@ mod tests {
         let config = AppConfig::default();
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: AppConfig = serde_json::from_str(&json).unwrap();
-        assert_eq!(deserialized.toggle_hotkey.mode, config.toggle_hotkey.mode);
         assert_eq!(deserialized.asr.language, config.asr.language);
     }
 

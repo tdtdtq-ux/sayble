@@ -75,17 +75,9 @@ fn test_full_config_persistence_flow() {
     // 1. 创建完整配置
     let config = AppConfig {
         toggle_hotkey: HotkeyConfig {
-            mode: HotkeyMode::Toggle,
             binding: HotkeyBinding {
                 modifiers: vec![Modifier::RightCtrl],
                 key: 0,
-            },
-        },
-        hold_hotkey: HotkeyConfig {
-            mode: HotkeyMode::HoldToRecord,
-            binding: HotkeyBinding {
-                modifiers: vec![Modifier::LeftCtrl],
-                key: 0x20,
             },
         },
         asr: AsrConfig {
@@ -107,9 +99,8 @@ fn test_full_config_persistence_flow() {
     let restored: AppConfig = serde_json::from_str(&json).unwrap();
 
     // 4. 验证所有字段
-    assert_eq!(restored.toggle_hotkey.mode, HotkeyMode::Toggle);
-    assert_eq!(restored.hold_hotkey.mode, HotkeyMode::HoldToRecord);
-    assert_eq!(restored.hold_hotkey.binding.key, 0x20);
+    assert_eq!(restored.toggle_hotkey.binding.modifiers, vec![Modifier::RightCtrl]);
+    assert_eq!(restored.toggle_hotkey.binding.key, 0);
     assert_eq!(restored.asr.app_id, "my_app");
     assert_eq!(restored.output_mode, OutputMode::Clipboard);
     assert_eq!(restored.microphone_device, "Default Mic");

@@ -1,4 +1,4 @@
-use crate::config::{HotkeyBinding, HotkeyConfig, HotkeyMode, Modifier};
+use crate::config::{HotkeyBinding, HotkeyConfig, Modifier};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
@@ -259,7 +259,6 @@ impl HotkeyManager {
 
             // 状态处理线程
             let mut key_state = KeyState::default();
-            let mut hold_active = false;
 
             log::info!("[hotkey] state processing loop started, configs count: {}", configs.lock().map(|c| c.len()).unwrap_or(0));
 
@@ -299,29 +298,15 @@ impl HotkeyManager {
                                 // 检查 ESC 键取消（始终发送，由前端判断是否在录音）
                                 if vk == 0x1B {
                                     // VK_ESCAPE
-                                    log::info!("[hotkey] ESC cancel, hold_active={}", hold_active);
+                                    log::info!("[hotkey] ESC cancel");
                                     let _ = event_tx.send(HotkeyEvent::CancelRecording);
-                                    hold_active = false;
                                     continue;
                                 }
 
                                 for config in &configs {
-                                    let matched = key_state.matches_binding(&config.binding);
-                                    if matched {
-                                        match config.mode {
-                                            HotkeyMode::Toggle => {
-                                                log::info!("[hotkey] Toggle => sending ToggleRecording");
-                                                let _ = event_tx.send(HotkeyEvent::ToggleRecording);
-                                            }
-                                            HotkeyMode::HoldToRecord => {
-                                                if !hold_active {
-                                                    hold_active = true;
-                                                    log::info!("[hotkey] HoldToRecord => sending StartRecording");
-                                                    let _ = event_tx
-                                                        .send(HotkeyEvent::StartRecording);
-                                                }
-                                            }
-                                        }
+                                    if key_state.matches_binding(&config.binding) {
+                                        log::info!("[hotkey] Toggle => sending ToggleRecording");
+                                        let _ = event_tx.send(HotkeyEvent::ToggleRecording);
                                     }
                                 }
                             }
@@ -331,21 +316,6 @@ impl HotkeyManager {
                                 } else {
                                     key_state.pressed_keys.remove(&vk);
                                     key_state.key_press_times.remove(&vk);
-                                }
-
-                                // 长按模式松开检测
-                                if hold_active {
-                                    let hold_configs: Vec<_> = configs
-                                        .iter()
-                                        .filter(|c| c.mode == HotkeyMode::HoldToRecord)
-                                        .collect();
-                                    for config in &hold_configs {
-                                        if !key_state.matches_binding(&config.binding) {
-                                            hold_active = false;
-                                            let _ = event_tx.send(HotkeyEvent::StopRecording);
-                                            break;
-                                        }
-                                    }
                                 }
                             }
                         }
@@ -562,7 +532,6 @@ mod tests {
     #[test]
     fn test_hotkey_manager_new() {
         let configs = vec![HotkeyConfig {
-            mode: HotkeyMode::Toggle,
             binding: HotkeyBinding {
                 modifiers: vec![Modifier::RightCtrl],
                 key: 0,
@@ -576,7 +545,6 @@ mod tests {
     fn test_hotkey_manager_update_configs() {
         let manager = HotkeyManager::new(vec![]);
         let new_configs = vec![HotkeyConfig {
-            mode: HotkeyMode::HoldToRecord,
             binding: HotkeyBinding {
                 modifiers: vec![Modifier::LeftCtrl],
                 key: 0x20,
@@ -585,7 +553,6 @@ mod tests {
         manager.update_configs(new_configs.clone());
         let configs = manager.configs.lock().unwrap();
         assert_eq!(configs.len(), 1);
-        assert_eq!(configs[0].mode, HotkeyMode::HoldToRecord);
     }
 
     #[test]

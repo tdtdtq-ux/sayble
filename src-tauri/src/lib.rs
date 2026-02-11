@@ -9,7 +9,7 @@ pub mod tray;
 
 use asr::volcengine::{AsrEvent, VolcEngineAsr};
 use audio::AudioCapture;
-use config::{AppConfig, AsrConfig, HotkeyBinding, HotkeyConfig, HotkeyMode, OutputMode};
+use config::{AppConfig, AsrConfig, HotkeyBinding, HotkeyConfig, OutputMode};
 use hotkey::HotkeyManager;
 use input::{ClipboardOutput, SimulateOutput};
 use store::AppStore;
@@ -226,19 +226,11 @@ struct RecordingFlag {
 }
 
 /// 从前端快捷键标签字符串解析为 HotkeyConfig 列表
-fn parse_hotkey_configs(toggle_label: &str, hold_label: &str) -> Vec<HotkeyConfig> {
+fn parse_hotkey_configs(toggle_label: &str) -> Vec<HotkeyConfig> {
     let mut configs = Vec::new();
     if let Some(binding) = HotkeyBinding::parse_from_label(toggle_label) {
         log::info!("[hotkey] parsed toggle binding: {:?} from \"{}\"", binding, toggle_label);
         configs.push(HotkeyConfig {
-            mode: HotkeyMode::Toggle,
-            binding,
-        });
-    }
-    if let Some(binding) = HotkeyBinding::parse_from_label(hold_label) {
-        log::info!("[hotkey] parsed hold binding: {:?} from \"{}\"", binding, hold_label);
-        configs.push(HotkeyConfig {
-            mode: HotkeyMode::HoldToRecord,
             binding,
         });
     }
@@ -341,8 +333,7 @@ fn load_hotkey_configs_from_store(app: &tauri::AppHandle) -> Option<Vec<HotkeyCo
     let store = app.state::<AppStore>();
     let settings = store.settings().get("app_settings")?;
     let toggle = settings.get("toggleHotkey")?.as_str()?;
-    let hold = settings.get("holdHotkey")?.as_str()?;
-    let configs = parse_hotkey_configs(toggle, hold);
+    let configs = parse_hotkey_configs(toggle);
     if configs.is_empty() {
         None
     } else {
@@ -551,7 +542,7 @@ pub fn run() {
             let hotkey_configs = load_hotkey_configs_from_store(&handle)
                 .unwrap_or_else(|| {
                     let default_config = AppConfig::default();
-                    vec![default_config.toggle_hotkey, default_config.hold_hotkey]
+                    vec![default_config.toggle_hotkey]
                 });
             log::info!("[hotkey] initial configs: {:?}", hotkey_configs);
             let mut manager = HotkeyManager::new(hotkey_configs);
@@ -842,8 +833,7 @@ fn cmd_save_settings(
 
     // 同步快捷键配置到 HotkeyManager
     let toggle = app_settings.get("toggleHotkey").and_then(|v| v.as_str()).unwrap_or("");
-    let hold = app_settings.get("holdHotkey").and_then(|v| v.as_str()).unwrap_or("");
-    let configs = parse_hotkey_configs(toggle, hold);
+    let configs = parse_hotkey_configs(toggle);
     if !configs.is_empty() {
         if let Ok(mgr) = hotkey_mgr.lock() {
             log::info!("[hotkey] updating configs on save: {:?}", configs);

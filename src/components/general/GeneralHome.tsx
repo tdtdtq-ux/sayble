@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +11,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
 import { RefreshCw } from "lucide-react";
 import type { AppSettings, AudioDevice } from "@/types/settings";
 import { useSettingsStore } from "@/stores/useSettingsStore";
@@ -35,13 +33,12 @@ export function GeneralHome() {
   }, []);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>通用设置</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <div className="space-y-6">
+      <h2 className="text-base font-semibold">输出</h2>
+
+      <div className="space-y-4">
         <div className="flex items-center gap-4">
-          <Label htmlFor="outputMode" className="shrink-0 w-20">输出方式</Label>
+          <Label htmlFor="outputMode" className="shrink-0 w-24 text-muted-foreground">输出方式</Label>
           <Select
             value={appSettings.outputMode}
             onValueChange={(v) => updateAppSetting("outputMode", v as AppSettings["outputMode"])}
@@ -56,7 +53,7 @@ export function GeneralHome() {
           </Select>
         </div>
         <div className="flex items-center gap-4">
-          <Label htmlFor="microphone" className="shrink-0 w-20">麦克风</Label>
+          <Label htmlFor="microphone" className="shrink-0 w-24 text-muted-foreground">麦克风</Label>
           <Select
             value={appSettings.microphoneDevice || "default"}
             onValueChange={(v) => updateAppSetting("microphoneDevice", v === "default" ? "" : v)}
@@ -77,9 +74,14 @@ export function GeneralHome() {
             <RefreshCw className="size-4" />
           </Button>
         </div>
-        <Separator />
+      </div>
+
+      <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <Label htmlFor="autoOutput">自动输出（识别完成后直接粘贴）</Label>
+          <div>
+            <Label htmlFor="autoOutput">自动输出</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">识别完成后直接粘贴到光标处</p>
+          </div>
           <Switch
             id="autoOutput"
             checked={appSettings.autoOutput}
@@ -87,7 +89,10 @@ export function GeneralHome() {
           />
         </div>
         <div className="flex items-center justify-between">
-          <Label htmlFor="autoStart">开机自启</Label>
+          <div>
+            <Label htmlFor="autoStart">开机自启</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">系统启动时自动运行 Sayble</p>
+          </div>
           <div className="flex items-center gap-2">
             {appSettings.autoStart && (
               <button
@@ -117,7 +122,7 @@ export function GeneralHome() {
             />
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
