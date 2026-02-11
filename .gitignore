@@ -27,7 +27,7 @@ dist-ssr
 .claude/
 
 # UI designs (unused)
-ui/
+/ui/
 
 # Windows junk
 nul

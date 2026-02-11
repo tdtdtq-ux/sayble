@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Settings, Home, UserRound, History } from "lucide-react";
-import { AppIcon } from "./AppIcon";
+import { ShellLayout, type ShellMenuItem } from "./ShellLayout";
 import { HomePage } from "./HomePage";
 import { PersonaPage } from "./PersonaPage";
 import { HistoryPage } from "./HistoryPage";
 
-const menuItems = [
+const menuItems: readonly ShellMenuItem[] = [
   { key: "home", label: "首页", icon: Home },
   { key: "history", label: "历史", icon: History },
   { key: "persona", label: "人设", icon: UserRound },
@@ -21,31 +21,11 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<TabKey>("home");
 
   return (
-    <div className="h-full flex">
-      {/* 左侧菜单 */}
-      <div className="w-56 shrink-0 bg-muted flex flex-col">
-        <div className="px-4 pt-6 pb-4">
-          <h1 className="text-2xl font-bold flex items-center gap-3">
-            <AppIcon className="size-9" />
-            <span className="font-brand">Sayble</span>
-          </h1>
-        </div>
-        <nav className="flex-1 flex flex-col gap-1 px-3">
-          {menuItems.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              onClick={() => setActiveTab(key)}
-              className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors text-left ${
-                activeTab === key
-                  ? "bg-background text-foreground"
-                  : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
-              }`}
-            >
-              <Icon className="size-4 shrink-0" />
-              {label}
-            </button>
-          ))}
-        </nav>
+    <ShellLayout
+      menuItems={menuItems}
+      activeTab={activeTab}
+      onTabChange={(key) => setActiveTab(key as TabKey)}
+      footer={
         <div className="px-4 pb-4">
           <button
             onClick={() => onOpenSettings()}
@@ -55,14 +35,11 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
             设置
           </button>
         </div>
-      </div>
-
-      {/* 右侧内容区 */}
-      <div className="flex-1 min-w-0 flex flex-col">
-        {activeTab === "home" && <HomePage onNavigate={(tab) => setActiveTab(tab as TabKey)} onOpenSettings={onOpenSettings} />}
-        {activeTab === "history" && <HistoryPage />}
-        {activeTab === "persona" && <PersonaPage />}
-      </div>
-    </div>
+      }
+    >
+      {activeTab === "home" && <HomePage onNavigate={(tab) => setActiveTab(tab as TabKey)} onOpenSettings={onOpenSettings} />}
+      {activeTab === "history" && <HistoryPage />}
+      {activeTab === "persona" && <PersonaPage />}
+    </ShellLayout>
   );
 }
