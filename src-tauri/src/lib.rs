@@ -15,7 +15,7 @@ use input::{ClipboardOutput, SimulateOutput};
 use store::AppStore;
 use tray::TrayManager;
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
 use tauri::{Emitter, Manager};
 use tauri_plugin_autostart::ManagerExt;
 
@@ -153,6 +153,8 @@ struct RecordingFlag {
     session_id: u64,
     /// drop 此 sender 会使桥接线程中的 audio_tx 也被 drop，从而触发 ASR 结束
     stop_tx: Option<std::sync::mpsc::Sender<()>>,
+    /// 当前 session 的取消标志，ESC 取消时设为 true，ASR 转发 task 据此跳过输出
+    cancelled: Arc<AtomicBool>,
 }
 
 /// 从前端快捷键标签字符串解析为 HotkeyConfig 列表
@@ -461,6 +463,7 @@ pub fn run() {
                 is_recording: false,
                 session_id: 0,
                 stop_tx: None,
+                cancelled: Arc::new(AtomicBool::new(false)),
             }));
             app.manage(recording_flag.clone());
 
@@ -556,6 +559,10 @@ pub fn run() {
 
                             HotkeyEvent::CancelRecording => {
                                 recording_start_time = None;
+                                // 先设置 cancelled 标志，让 ASR 转发 task 跳过输出
+                                if let Ok(f) = hotkey_flag.lock() {
+                                    f.cancelled.store(true, Ordering::SeqCst);
+                                }
                                 let _ = stop_recording_inner(&hotkey_flag);
                                 let _ = hotkey_handle.emit("floating-control", serde_json::json!({
                                     "action": "cancel",
@@ -796,13 +803,14 @@ fn start_recording_inner(
 
     VolcEngineAsr::validate_config(&asr_config)?;
 
-    // 分配新 session_id（在 spawn 线程之前，一次锁内完成递增和写入）
-    let session_id = {
+    // 分配新 session_id，并重置 cancelled 标志
+    let (session_id, cancelled) = {
         let mut f = flag.lock().map_err(|e| e.to_string())?;
         let new_id = f.session_id.wrapping_add(1);
         f.session_id = new_id;
+        f.cancelled = Arc::new(AtomicBool::new(false));
         log::debug!("[recording] allocated session_id={}", new_id);
-        new_id
+        (new_id, Arc::clone(&f.cancelled))
     };
 
     // 1. 构建 channel，直接调用 run_asr_session（在 Tauri 的 tokio runtime 中）
@@ -909,8 +917,12 @@ fn start_recording_inner(
                         AsrEvent::FinalResult(text, duration_ms) => {
                             had_final = true;
                             log::info!("[asr-forward] FinalResult received, text_len={}, duration_ms={:?}", text.len(), duration_ms);
-                            app_clone.state::<AppStore>().accumulate_stats(text.chars().count(), *duration_ms);
-                            polish_and_output(&app_clone, session_id, text).await;
+                            if cancelled.load(Ordering::SeqCst) {
+                                log::info!("[asr-forward] session {} cancelled, skipping output", session_id);
+                            } else {
+                                app_clone.state::<AppStore>().accumulate_stats(text.chars().count(), *duration_ms);
+                                polish_and_output(&app_clone, session_id, text).await;
+                            }
                             let _ = app_clone.emit("asr-event", serde_json::json!({
                                 "sessionId": session_id,
                                 "event": "Finished"
@@ -933,7 +945,9 @@ fn start_recording_inner(
                         }
                         AsrEvent::Disconnected => {
                             // 内部消化：不暴露给前端
-                            if !had_final {
+                            if cancelled.load(Ordering::SeqCst) {
+                                log::info!("[asr-forward] session {} cancelled, skipping output on disconnect", session_id);
+                            } else if !had_final {
                                 if !last_partial_text.is_empty() {
                                     app_clone.state::<AppStore>().accumulate_stats(last_partial_text.chars().count(), None);
                                     polish_and_output(&app_clone, session_id, &last_partial_text).await;
