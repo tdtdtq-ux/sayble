@@ -82,7 +82,15 @@ pub async fn polish_text(config: &PolishConfig, text: &str) -> Result<String, St
             "润色 API 返回空内容".to_string()
         })?;
 
-    let content = content.trim().to_string();
+    // Strip <text> tags that the LLM may echo back
+    let content = content.trim();
+    let content = content
+        .strip_prefix("<text>")
+        .unwrap_or(content)
+        .strip_suffix("</text>")
+        .unwrap_or(content)
+        .trim()
+        .to_string();
     log::info!("[polish] success, result_len={}", content.len());
     Ok(content)
 }
