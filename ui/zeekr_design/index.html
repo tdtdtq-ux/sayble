@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sayble - ZEEKR Design</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Font: Audiowide for Headers (Simulated ZEEKR Tech feel) -->
+    <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Inter:wght@400;500;600&display=swap"
+        rel="stylesheet">
+</head>
+
+<body class="dark-theme">
+    <div class="app-layout">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand-header">
+                <div class="brand-logo">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" fill="#FF4D00" stroke="#FF4D00" stroke-width="2" />
+                    </svg>
+                </div>
+                <span class="brand-text">SAYBLE</span>
+            </div>
+
+            <nav class="nav-container">
+                <div class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard')">
+                    <i data-lucide="layout-grid"></i>
+                    <span>DASHBOARD</span>
+                </div>
+                <div class="nav-item" data-page="persona" onclick="switchPage('persona')">
+                    <i data-lucide="users"></i>
+                    <span>PERSONA</span>
+                </div>
+                <div class="nav-item" data-page="history" onclick="switchPage('history')">
+                    <i data-lucide="history"></i>
+                    <span>HISTORY</span>
+                </div>
+                <div class="nav-item" data-page="settings" onclick="switchPage('settings')">
+                    <i data-lucide="settings"></i>
+                    <span>SETTINGS</span>
+                </div>
+            </nav>
+
+            <div class="system-status">
+                <div class="status-indicator online"></div>
+                <span class="status-text">SYSTEM ONLINE</span>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="workspace">
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <div class="page-title" id="pageTitle">DASHBOARD</div>
+                <div class="user-profile">
+                    <div class="notification-badge">
+                        <i data-lucide="bell"></i>
+                        <span class="dot"></span>
+                    </div>
+                    <div class="avatar">
+                        <span>JD</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content Area -->
+            <div class="content-area">
+
+                <!-- Dashboard Page -->
+                <div id="dashboard" class="page-view active">
+                    <div class="stats-row">
+                        <div class="stat-card">
+                            <div class="stat-header">TOTAL INPUT</div>
+                            <div class="stat-value">1,284</div>
+                            <div class="stat-trend positive">
+                                <i data-lucide="trending-up"></i> +12%
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-header">CHARACTERS</div>
+                            <div class="stat-value">42.5k</div>
+                            <div class="stat-sub">~8h Saved</div>
+                        </div>
+                        <div class="stat-card highlight">
+                            <div class="stat-header">ACCURACY</div>
+                            <div class="stat-value">98.2%</div>
+                            <div class="stat-badge">VOLC ENGINE</div>
+                        </div>
+                    </div>
+
+                    <div class="main-grid">
+                        <!-- Recent Activity Chart -->
+                        <div class="grid-card wide">
+                            <div class="card-header">
+                                <h3>Recognized Activity</h3>
+                                <div class="card-actions">
+                                    <span class="active-pill">Week</span>
+                                    <span>Month</span>
+                                </div>
+                            </div>
+                            <div class="chart-container">
+                                <!-- Simulated Chart Bars -->
+                                <div class="bar-group">
+                                    <div class="bar" style="height: 40%"></div>
+                                    <div class="bar" style="height: 60%"></div>
+                                    <div class="bar" style="height: 35%"></div>
+                                    <div class="bar active" style="height: 80%"></div>
+                                    <div class="bar" style="height: 50%"></div>
+                                    <div class="bar" style="height: 20%"></div>
+                                    <div class="bar" style="height: 65%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Current Persona Status -->
+                        <div class="grid-card">
+                            <div class="card-header">
+                                <h3>Active Persona</h3>
+                            </div>
+                            <div class="persona-status-display">
+                                <div class="persona-ring">
+                                    <i data-lucide="briefcase" size="32"></i>
+                                </div>
+                                <div class="persona-info">
+                                    <h4>Business Pro</h4>
+                                    <p>Formal & Professional</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" checked>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            <div class="status-console">
+                                <div class="console-line">> Initializing LLM... OK</div>
+                                <div class="console-line">> Loading Context... OK</div>
+                                <div class="console-line active">> Ready for input_</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Live Demo Panel -->
+                    <div class="live-demo-panel">
+                        <div class="panel-label">FLOATING HUD PREVIEW</div>
+                        <div class="preview-container">
+                            <div class="hud-pill" id="hudPill">
+                                <div class="hud-status error" id="hudDot"></div>
+                                <span class="hud-text" id="hudText">Recording... 00:04</span>
+                                <div class="hud-wave">
+                                    <span></span><span></span><span></span><span></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="demo-controls">
+                            <button class="zk-btn outline" onclick="simulateHUD('rec')">REC</button>
+                            <button class="zk-btn outline" onclick="simulateHUD('process')">PROCESS</button>
+                            <button class="zk-btn" onclick="simulateHUD('done')">DONE</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Persona Page -->
+                <div id="persona" class="page-view">
+                    <div class="control-bar">
+                        <div class="search-box">
+                            <i data-lucide="search"></i>
+                            <input type="text" placeholder="Search personas...">
+                        </div>
+                        <button class="zk-btn icon-text" onclick="toggleModal('personaModal')">
+                            <i data-lucide="plus"></i> CREATE NEW
+                        </button>
+                    </div>
+
+                    <div class="persona-cards-container">
+                        <div class="zk-card active">
+                            <div class="card-top">
+                                <i data-lucide="briefcase" class="card-icon"></i>
+                                <div class="status-dot"></div>
+                            </div>
+                            <h3>Business Pro</h3>
+                            <p class="card-desc">Converts spoken language into formal business correspondence.</p>
+                            <div class="card-tags">
+                                <span>Formal</span>
+                                <span>Email</span>
+                            </div>
+                            <div class="card-footer">
+                                <button class="zk-icon-btn"><i data-lucide="edit-3"></i></button>
+                            </div>
+                        </div>
+
+                        <div class="zk-card">
+                            <div class="card-top">
+                                <i data-lucide="message-circle" class="card-icon"></i>
+                            </div>
+                            <h3>Social Genius</h3>
+                            <p class="card-desc">Lively tone with emojis for social media.</p>
+                            <div class="card-tags">
+                                <span>Casual</span>
+                                <span>Emoji</span>
+                            </div>
+                            <div class="card-footer">
+                                <button class="zk-icon-btn"><i data-lucide="edit-3"></i></button>
+                                <button class="zk-icon-btn danger"><i data-lucide="trash-2"></i></button>
+                            </div>
+                        </div>
+
+                        <div class="zk-card">
+                            <div class="card-top">
+                                <i data-lucide="zap" class="card-icon"></i>
+                            </div>
+                            <h3>Minimalist</h3>
+                            <p class="card-desc">Grammar correction only. No style changes.</p>
+                            <div class="card-tags">
+                                <span>Direct</span>
+                                <span>Fast</span>
+                            </div>
+                            <div class="card-footer">
+                                <button class="zk-icon-btn"><i data-lucide="edit-3"></i></button>
+                                <button class="zk-icon-btn danger"><i data-lucide="trash-2"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- History Page -->
+                <div id="history" class="page-view">
+                    <div class="list-header">
+                        <span>TIMELINE</span>
+                        <button class="zk-btn text-danger">CLEAR ALL</button>
+                    </div>
+                    <div class="history-timeline">
+                        <div class="timeline-item">
+                            <div class="time-marker">14:02</div>
+                            <div class="timeline-content">
+                                <div class="content-header">
+                                    <span class="badge">Business Pro</span>
+                                    <span class="meta">120 chars</span>
+                                </div>
+                                <div class="text-comparison">
+                                    <div class="original">"Meeting at two in room three about UI redesign."</div>
+                                    <i data-lucide="arrow-right" class="arrow"></i>
+                                    <div class="polished">"The meeting regarding the UI redesign proposal is scheduled
+                                        for 2:00 PM in Conference Room 3."</div>
+                                </div>
+                                <div class="item-actions">
+                                    <button class="action-link"><i data-lucide="copy"></i> Copy Result</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="timeline-item">
+                            <div class="time-marker">13:45</div>
+                            <div class="timeline-content">
+                                <div class="content-header">
+                                    <span class="badge secondary">Minimalist</span>
+                                    <span class="meta">45 chars</span>
+                                </div>
+                                <div class="text-comparison">
+                                    <div class="polished">"Set an alarm for 8 AM and check tomorrow's weather."</div>
+                                </div>
+                                <div class="item-actions">
+                                    <button class="action-link"><i data-lucide="copy"></i> Copy Result</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Page -->
+                <div id="settings" class="page-view">
+                    <div class="settings-layout">
+                        <div class="settings-nav">
+                            <div class="nav-pill active">ASR Engine</div>
+                            <div class="nav-pill">LLM Model</div>
+                            <div class="nav-pill">General</div>
+                        </div>
+
+                        <div class="settings-content">
+                            <!-- ASR Section -->
+                            <div class="settings-section">
+                                <h3>Voice Recognition Provider</h3>
+                                <div class="provider-grid">
+                                    <div class="provider-card active">
+                                        <div class="provider-head">
+                                            <span>VOLC ENGINE</span>
+                                            <i data-lucide="check-circle-2" class="check"></i>
+                                        </div>
+                                        <div class="provider-status">Online • 12ms Latency</div>
+                                    </div>
+                                    <div class="provider-card">
+                                        <div class="provider-head">
+                                            <span>TENCENT CLOUD</span>
+                                        </div>
+                                        <div class="provider-status">Idle</div>
+                                    </div>
+                                </div>
+
+                                <div class="input-group">
+                                    <label>APP ID</label>
+                                    <input type="text" class="zk-input" value="84271920">
+                                </div>
+                                <div class="input-group">
+                                    <label>ACCESS TOKEN</label>
+                                    <input type="password" class="zk-input" value="****************">
+                                </div>
+                            </div>
+
+                            <div class="settings-section">
+                                <h3>VAD Threshold</h3>
+                                <div class="range-slider">
+                                    <span>Sensitive</span>
+                                    <input type="range" class="zk-range" value="40">
+                                    <span>Strict</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- ZEEKR Style Modal -->
+    <div id="personaModal" class="modal-backdrop" style="display: none;">
+        <div class="modal-window">
+            <div class="modal-head">
+                <h2>CONFIGURE PERSONA</h2>
+                <button class="close-btn" onclick="toggleModal('personaModal')"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <label>PERSONA NAME</label>
+                    <input type="text" class="zk-input" value="New Persona">
+                </div>
+                <div class="input-group">
+                    <label>SYSTEM PROMPT</label>
+                    <textarea class="zk-textarea" rows="5">You are a helpful assistant.</textarea>
+                    <div class="helper-text">Define the tone and style of the rewriting engine.</div>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button class="zk-btn outline" onclick="toggleModal('personaModal')">CANCEL</button>
+                <button class="zk-btn" onclick="toggleModal('personaModal')">SAVE CONFIG</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        function switchPage(pageId) {
+            // Nav Active State
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            document.querySelector(`.nav-item[data-page="${pageId}"]`).classList.add('active');
+
+            // Page Visibility
+            document.querySelectorAll('.page-view').forEach(el => el.classList.remove('active'));
+            document.getElementById(pageId).classList.add('active');
+
+            // Header Title Update
+            document.getElementById('pageTitle').innerText = pageId.toUpperCase();
+        }
+
+        function toggleModal(modalId) {
+            const el = document.getElementById(modalId);
+            el.style.display = el.style.display === 'none' ? 'flex' : 'none';
+        }
+
+        function simulateHUD(state) {
+            const pill = document.getElementById('hudPill');
+            const dot = document.getElementById('hudDot');
+            const text = document.getElementById('hudText');
+            const wave = document.querySelector('.hud-wave');
+
+            // Reset
+            pill.className = 'hud-pill';
+            dot.className = 'hud-status';
+            wave.style.opacity = '0';
+
+            if (state === 'rec') {
+                dot.classList.add('rec');
+                text.innerText = "Recording... 00:05";
+                wave.style.opacity = '1';
+                pill.style.borderColor = '#FF4D00';
+            } else if (state === 'process') {
+                dot.classList.add('process');
+                text.innerText = "Processing...";
+                pill.style.borderColor = '#00E5FF';
+            } else {
+                dot.classList.add('done');
+                text.innerText = "Copied to Clipboard";
+                pill.style.borderColor = '#00FF94';
+            }
+        }
+    </script>
+</body>
+
+</html>

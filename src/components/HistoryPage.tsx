@@ -52,7 +52,6 @@ function groupByDate(records: HistoryRecord[]): [string, HistoryRecord[]][] {
   for (const record of records) {
     const date = new Date(record.timestamp);
     const key = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-    const label = formatDateLabel(record.timestamp);
     if (!groups.has(key)) {
       groups.set(key, []);
     }
