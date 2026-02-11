@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Settings, Home, UserRound } from "lucide-react";
+import { Settings, Home, UserRound, History } from "lucide-react";
 import { AppIcon } from "./AppIcon";
 import { HomePage } from "./HomePage";
 import { PersonaPage } from "./PersonaPage";
+import { HistoryPage } from "./HistoryPage";
 
 const menuItems = [
   { key: "home", label: "首页", icon: Home },
+  { key: "history", label: "历史", icon: History },
   { key: "persona", label: "人设", icon: UserRound },
 ] as const;
 
@@ -57,7 +59,8 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
 
       {/* 右侧内容区 */}
       <div className="flex-1 min-w-0 flex flex-col">
-        {activeTab === "home" && <HomePage />}
+        {activeTab === "home" && <HomePage onNavigate={(tab) => setActiveTab(tab as TabKey)} />}
+        {activeTab === "history" && <HistoryPage />}
         {activeTab === "persona" && <PersonaPage />}
       </div>
     </div>
