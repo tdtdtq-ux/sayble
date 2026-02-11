@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { AppIcon } from "./AppIcon";
+import { useSettingsStore } from "@/stores/useSettingsStore";
+import { toast } from "sonner";
 
 declare const __BUILD_TIME__: string;
 
@@ -11,6 +13,7 @@ const badges = ["Tauri v2", "Rust", "React 19", "MIT"];
 
 export function About() {
   const [version, setVersion] = useState("");
+  const deviceId = useSettingsStore((s) => s.appSettings.deviceId);
 
   useEffect(() => {
     getVersion().then(setVersion).catch(() => setVersion("0.1.0"));
@@ -39,6 +42,17 @@ export function About() {
         <span className="inline-block rounded-full border px-3 py-0.5 text-xs text-muted-foreground">
           Build {__BUILD_TIME__.slice(0, 16).replace("T", " ")} UTC
         </span>
+        {deviceId && (
+          <span
+            className="inline-block rounded-full border px-3 py-0.5 text-xs text-muted-foreground cursor-pointer hover:border-primary/50 transition-colors"
+            title="点击复制完整 Device ID"
+            onClick={() => {
+              navigator.clipboard.writeText(deviceId).then(() => toast.success("Device ID 已复制"));
+            }}
+          >
+            ID: {deviceId.slice(0, 8)}...
+          </span>
+        )}
       </div>
 
       <div className="flex flex-wrap justify-center gap-2">

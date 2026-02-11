@@ -146,6 +146,74 @@ fn check_autostart_hijacked() -> Option<String> {
     None
 }
 
+/// 读取 Windows MachineGuid 作为设备唯一标识
+#[cfg(target_os = "windows")]
+fn get_machine_guid() -> Option<String> {
+    use windows::Win32::System::Registry::*;
+    use windows::core::*;
+
+    let path: Vec<u16> = "SOFTWARE\\Microsoft\\Cryptography"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let mut hkey = HKEY::default();
+    let result = unsafe {
+        RegOpenKeyExW(
+            HKEY_LOCAL_MACHINE,
+            PCWSTR(path.as_ptr()),
+            0,
+            KEY_READ,
+            &mut hkey,
+        )
+    };
+    if result.is_err() {
+        log::warn!("[app] failed to open Cryptography registry key");
+        return None;
+    }
+
+    let value_name = w!("MachineGuid");
+    let mut buf_size: u32 = 0;
+    let query = unsafe {
+        RegQueryValueExW(hkey, value_name, None, None, None, Some(&mut buf_size))
+    };
+    if query.is_err() || buf_size == 0 {
+        unsafe { let _ = RegCloseKey(hkey); }
+        log::warn!("[app] MachineGuid value not found or empty");
+        return None;
+    }
+
+    let mut buf = vec![0u8; buf_size as usize];
+    let query2 = unsafe {
+        RegQueryValueExW(
+            hkey,
+            value_name,
+            None,
+            None,
+            Some(buf.as_mut_ptr()),
+            Some(&mut buf_size),
+        )
+    };
+    unsafe { let _ = RegCloseKey(hkey); }
+
+    if query2.is_err() {
+        log::warn!("[app] failed to read MachineGuid value");
+        return None;
+    }
+
+    // REG_SZ: UTF-16LE with null terminator
+    let wide: Vec<u16> = buf
+        .chunks_exact(2)
+        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .collect();
+    let s = String::from_utf16_lossy(&wide);
+    let s = s.trim_end_matches('\0').to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
 /// 录音状态标志，用于 start/stop 之间通信
 /// session_id 用于防止旧线程清理时覆盖新录音的状态
 struct RecordingFlag {
@@ -425,6 +493,41 @@ pub fn run() {
             // 初始化 AppStore 并注册为 managed state
             let app_store = AppStore::init();
             app.manage(app_store);
+
+            // 确保 deviceId 存在：首次启动时从 MachineGuid 生成
+            {
+                let store = app.state::<AppStore>();
+                let has_device_id = store.settings().get("app_settings")
+                    .and_then(|s| s.get("deviceId").cloned())
+                    .and_then(|v| v.as_str().map(|s| s.to_string()))
+                    .map(|s| !s.is_empty())
+                    .unwrap_or(false);
+
+                if !has_device_id {
+                    #[cfg(target_os = "windows")]
+                    let guid = get_machine_guid();
+                    #[cfg(not(target_os = "windows"))]
+                    let guid: Option<String> = None;
+
+                    if let Some(id) = guid {
+                        let mut app_settings = store.settings().get("app_settings")
+                            .and_then(|v| v.as_object().cloned())
+                            .unwrap_or_default();
+                        app_settings.insert("deviceId".to_string(), serde_json::Value::String(id.clone()));
+                        store.settings().set("app_settings", serde_json::Value::Object(app_settings));
+                        let _ = store.settings().save();
+                        log::info!("[app] device id: {}...", &id[..id.len().min(8)]);
+                    } else {
+                        log::warn!("[app] failed to obtain device id");
+                    }
+                } else {
+                    let id = store.settings().get("app_settings")
+                        .and_then(|s| s.get("deviceId").cloned())
+                        .and_then(|v| v.as_str().map(|s| s.to_string()))
+                        .unwrap_or_default();
+                    log::info!("[app] device id: {}...", &id[..id.len().min(8)]);
+                }
+            }
 
             // 同步自启动状态：用户未开启但系统中启用了，则关闭
             // 用户开启但被第三方禁用的情况，由前端主动调用 cmd_check_autostart 检测并提示

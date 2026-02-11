@@ -117,6 +117,8 @@ Vitest + jsdom 环境 + @testing-library/react。测试文件放在对应目录�
 
 当前主要面向 Windows 平台（hotkey 模块使用 Windows API 键盘钩子）。主窗口使用 Overlay 标题栏模式（`titleBarStyle: "Overlay"`），由系统提供窗口控制按钮，关闭按钮拦截为隐藏到托盘。浮窗为独立窗口（`decorations: false, alwaysOnTop: true`），不显示在任务栏。通过 `build.manifest` 声明 `PerMonitorV2` DPI 感知，确保多屏不同缩放比例下 UI 清晰。
 
+**Device ID**：应用首次启动时从 Windows 注册表 `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid` 读取机器唯一标识，写入 `app_settings.deviceId` 并持久化。后续启动直接读取已存储的值。前端 About 页面展示前 8 位，点击可复制完整 ID。跨平台 TODO：macOS/Linux 需要实现各自的设备标识获取逻辑。
+
 ## Data Paths
 
 | 路径 | 说明 |

@@ -10,6 +10,7 @@ export interface AppSettings {
   autoOutput: boolean;
   toggleHotkey: string;
   holdHotkey: string;
+  deviceId: string;
 }
 
 export const defaultSettings: AppSettings = {
@@ -19,4 +20,5 @@ export const defaultSettings: AppSettings = {
   autoOutput: true,
   toggleHotkey: "右Ctrl",
   holdHotkey: "左Ctrl + Space",
+  deviceId: "",
 };
