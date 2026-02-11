@@ -26,5 +26,8 @@ dist-ssr
 # Claude Code
 .claude/
 
+# UI designs (unused)
+ui/
+
 # Windows junk
 nul
