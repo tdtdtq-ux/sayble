@@ -1,21 +1,21 @@
 <!DOCTYPE html>
-<html lang="zh-CN" class="scroll-smooth">
+<html lang="en" class="scroll-smooth">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sayble — 跨平台桌面语音输入工具</title>
-  <meta name="description" content="Sayble 是一款跨平台桌面语音输入工具，通过全局热键唤起，语音识别后自动输入到任意应用中。" />
+  <title>Sayble — Open-source Voice Typing</title>
+  <meta name="description" content="Open-source voice typing. Bring your own APIs. Pay per use. Your data stays on your machine." />
   <link rel="icon" href="favicon.ico" />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script>
     tailwind.config = {
       theme: {
         extend: {
           fontFamily: {
-            brand: ['Urbanist', 'sans-serif'],
+            brand: ['Urbanist', 'system-ui', 'sans-serif'],
           },
         },
       },
@@ -23,6 +23,8 @@
   </script>
   <style>
     html { font-family: 'Urbanist', system-ui, sans-serif; }
+    [data-lang="en"] [data-i18n-zh],
+    [data-lang="zh"] [data-i18n-en] { display: none !important; }
   </style>
 </head>
 <body class="bg-white text-gray-900 antialiased">
@@ -40,16 +42,34 @@
         </svg>
         <span class="font-brand font-bold text-xl tracking-tight">Sayble</span>
       </a>
-      <div class="flex items-center gap-8 text-sm font-medium text-gray-600">
-        <a href="#features" class="hover:text-gray-900 transition-colors">功能</a>
-        <a href="#download" class="hover:text-gray-900 transition-colors">下载</a>
+      <div class="flex items-center gap-6 text-sm font-medium text-gray-600">
+        <a href="#why" class="hidden sm:inline hover:text-gray-900 transition-colors">
+          <span data-i18n-en>Why Sayble</span>
+          <span data-i18n-zh>为什么选 Sayble</span>
+        </a>
+        <a href="#features" class="hover:text-gray-900 transition-colors">
+          <span data-i18n-en>Features</span>
+          <span data-i18n-zh>功能</span>
+        </a>
+        <a href="#engines" class="hidden sm:inline hover:text-gray-900 transition-colors">
+          <span data-i18n-en>Engines</span>
+          <span data-i18n-zh>引擎</span>
+        </a>
+        <a href="#download" class="hover:text-gray-900 transition-colors">
+          <span data-i18n-en>Download</span>
+          <span data-i18n-zh>下载</span>
+        </a>
         <a href="https://github.com/tdtdtq-ux/sayble" target="_blank" rel="noopener noreferrer" class="hover:text-gray-900 transition-colors">GitHub</a>
+        <!-- Language switcher -->
+        <button id="lang-toggle" class="ml-1 px-2.5 py-1 rounded-md border border-gray-200 text-xs font-semibold hover:bg-gray-50 transition-colors cursor-pointer">
+          中文
+        </button>
       </div>
     </nav>
   </header>
 
   <!-- Hero -->
-  <section class="pt-40 pb-24 px-6">
+  <section class="pt-40 pb-20 px-6">
     <div class="max-w-3xl mx-auto text-center">
       <div class="flex justify-center mb-8">
         <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-20 h-20 text-gray-900">
@@ -60,80 +80,403 @@
           <path d="M26.5 6a9.5 9.5 0 0 1 0 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none" opacity="0.3" />
         </svg>
       </div>
-      <h1 class="font-brand font-bold text-5xl md:text-6xl tracking-tight leading-tight mb-6">
-        说话，即输入
-      </h1>
-      <p class="text-lg md:text-xl text-gray-500 max-w-xl mx-auto mb-10 leading-relaxed">
-        Sayble 是一款桌面语音输入工具。按下快捷键，说出内容，文字自动输入到任意应用中。
+      <h1 class="font-brand font-bold text-5xl md:text-6xl tracking-tight leading-tight mb-6">Sayble</h1>
+      <p class="text-lg md:text-xl text-gray-500 max-w-2xl mx-auto mb-10 leading-relaxed">
+        <span data-i18n-en>Open-source voice typing. Bring your own APIs. Pay per use. Your data stays on your machine.</span>
+        <span data-i18n-zh>开源语音输入工具。自选引擎，按量付费，数据留在本地。</span>
       </p>
-      <a href="#download" class="inline-flex items-center gap-2 bg-gray-900 text-white px-8 py-3.5 rounded-full text-sm font-semibold hover:bg-gray-800 transition-colors">
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3" />
-        </svg>
-        下载 Sayble
-      </a>
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+        <a href="#download" class="inline-flex items-center gap-2 bg-gray-900 text-white px-8 py-3.5 rounded-full text-sm font-semibold hover:bg-gray-800 transition-colors">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3" />
+          </svg>
+          <span data-i18n-en>Download</span>
+          <span data-i18n-zh>下载</span>
+        </a>
+        <a href="https://github.com/tdtdtq-ux/sayble" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 border border-gray-200 px-8 py-3.5 rounded-full text-sm font-semibold hover:bg-gray-50 transition-colors">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          GitHub
+        </a>
+      </div>
     </div>
   </section>
 
-  <!-- Features -->
-  <section id="features" class="py-24 px-6 bg-gray-50">
-    <div class="max-w-5xl mx-auto">
-      <h2 class="font-brand font-bold text-3xl md:text-4xl text-center mb-16 tracking-tight">核心功能</h2>
-      <div class="grid md:grid-cols-2 gap-6">
-
-        <!-- Feature 1 -->
+  <!-- Why Sayble -->
+  <section id="why" class="py-20 px-6 bg-gray-50">
+    <div class="max-w-4xl mx-auto">
+      <h2 class="font-brand font-bold text-3xl md:text-4xl text-center mb-6 tracking-tight">
+        <span data-i18n-en>Why Sayble</span>
+        <span data-i18n-zh>为什么选 Sayble</span>
+      </h2>
+      <p class="text-gray-500 text-center max-w-2xl mx-auto mb-14 leading-relaxed">
+        <span data-i18n-en>Most voice typing tools charge monthly fees, lock you into their speech engine, and route your voice through their servers. Sayble is different.</span>
+        <span data-i18n-zh>市面上的语音输入工具按月收费，绑定引擎，语音数据全部经过他们的服务器。Sayble 不一样。</span>
+      </p>
+      <div class="grid md:grid-cols-3 gap-6">
+        <!-- You choose the engine -->
         <div class="bg-white rounded-2xl p-8 border border-gray-100">
           <div class="w-11 h-11 bg-emerald-50 rounded-xl flex items-center justify-center mb-5">
             <svg class="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
             </svg>
           </div>
-          <h3 class="font-brand font-bold text-lg mb-2">语音识别</h3>
-          <p class="text-gray-500 text-sm leading-relaxed">基于火山引擎 ASR 的实时语音识别，说话即转文字，准确率高，延迟低。</p>
+          <h3 class="font-brand font-bold text-lg mb-2">
+            <span data-i18n-en>You choose the engine</span>
+            <span data-i18n-zh>引擎自选</span>
+          </h3>
+          <p class="text-gray-500 text-sm leading-relaxed">
+            <span data-i18n-en>Plug in any ASR provider or OpenAI-compatible LLM you like.</span>
+            <span data-i18n-zh>ASR 和润色 LLM 都由你决定，接入任何兼容 API 即可。</span>
+          </p>
         </div>
-
-        <!-- Feature 2 -->
+        <!-- You pay API costs only -->
         <div class="bg-white rounded-2xl p-8 border border-gray-100">
           <div class="w-11 h-11 bg-emerald-50 rounded-xl flex items-center justify-center mb-5">
             <svg class="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h3 class="font-brand font-bold text-lg mb-2">全局热键</h3>
-          <p class="text-gray-500 text-sm leading-relaxed">无论当前焦点在哪个应用，按下快捷键即可开始语音输入，无需切换窗口。</p>
+          <h3 class="font-brand font-bold text-lg mb-2">
+            <span data-i18n-en>Pay API costs only</span>
+            <span data-i18n-zh>按量付费</span>
+          </h3>
+          <p class="text-gray-500 text-sm leading-relaxed">
+            <span data-i18n-en>No subscriptions, no tiers, typically a few cents per day.</span>
+            <span data-i18n-zh>没有会员、没有套餐，直接用官方 API 原价，一个月可能只花几块钱。</span>
+          </p>
         </div>
-
-        <!-- Feature 3 -->
-        <div class="bg-white rounded-2xl p-8 border border-gray-100">
-          <div class="w-11 h-11 bg-emerald-50 rounded-xl flex items-center justify-center mb-5">
-            <svg class="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
-          </div>
-          <h3 class="font-brand font-bold text-lg mb-2">智能润色</h3>
-          <p class="text-gray-500 text-sm leading-relaxed">可选接入 LLM 对识别结果进行润色，自动修正语气词、补全标点，让口语变书面语。</p>
-        </div>
-
-        <!-- Feature 4 -->
+        <!-- You own your data -->
         <div class="bg-white rounded-2xl p-8 border border-gray-100">
           <div class="w-11 h-11 bg-emerald-50 rounded-xl flex items-center justify-center mb-5">
             <svg class="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
           </div>
-          <h3 class="font-brand font-bold text-lg mb-2">本地优先</h3>
-          <p class="text-gray-500 text-sm leading-relaxed">所有设置和历史数据存储在本地，音频数据不落盘，用完即丢，保护你的隐私。</p>
+          <h3 class="font-brand font-bold text-lg mb-2">
+            <span data-i18n-en>You own your data</span>
+            <span data-i18n-zh>数据自主</span>
+          </h3>
+          <p class="text-gray-500 text-sm leading-relaxed">
+            <span data-i18n-en>Everything stays local, no accounts, no telemetry.</span>
+            <span data-i18n-zh>所有数据留在本地，无账号、无遥测。</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section id="features" class="py-20 px-6">
+    <div class="max-w-5xl mx-auto">
+      <h2 class="font-brand font-bold text-3xl md:text-4xl text-center mb-14 tracking-tight">
+        <span data-i18n-en>Features</span>
+        <span data-i18n-zh>功能</span>
+      </h2>
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+        <!-- Global hotkey -->
+        <div class="bg-gray-50 rounded-2xl p-7 border border-gray-100">
+          <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center mb-4 border border-gray-100">
+            <svg class="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+            </svg>
+          </div>
+          <h3 class="font-brand font-bold text-base mb-1.5">
+            <span data-i18n-en>Global hotkey</span>
+            <span data-i18n-zh>全局热键</span>
+          </h3>
+          <p class="text-gray-500 text-sm leading-relaxed">
+            <span data-i18n-en>Press a key in any app to start voice typing, works system-wide.</span>
+            <span data-i18n-zh>在任意应用中按下快捷键即可录音，全系统可用。</span>
+          </p>
+        </div>
+
+        <!-- Real-time streaming -->
+        <div class="bg-gray-50 rounded-2xl p-7 border border-gray-100">
+          <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center mb-4 border border-gray-100">
+            <svg class="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <h3 class="font-brand font-bold text-base mb-1.5">
+            <span data-i18n-en>Real-time streaming</span>
+            <span data-i18n-zh>实时流式识别</span>
+          </h3>
+          <p class="text-gray-500 text-sm leading-relaxed">
+            <span data-i18n-en>Words appear as you speak, powered by WebSocket-based ASR.</span>
+            <span data-i18n-zh>边说边出字，基于 WebSocket 流式 ASR。</span>
+          </p>
+        </div>
+
+        <!-- LLM polish -->
+        <div class="bg-gray-50 rounded-2xl p-7 border border-gray-100">
+          <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center mb-4 border border-gray-100">
+            <svg class="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+          </div>
+          <h3 class="font-brand font-bold text-base mb-1.5">
+            <span data-i18n-en>LLM polish</span>
+            <span data-i18n-zh>LLM 润色</span>
+          </h3>
+          <p class="text-gray-500 text-sm leading-relaxed">
+            <span data-i18n-en>Optionally refine raw speech into clean text — fix typos, casual-to-formal, etc.</span>
+            <span data-i18n-zh>可选接入大模型，自动修正错别字、口语转书面语。</span>
+          </p>
+        </div>
+
+        <!-- Persona system -->
+        <div class="bg-gray-50 rounded-2xl p-7 border border-gray-100">
+          <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center mb-4 border border-gray-100">
+            <svg class="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </div>
+          <h3 class="font-brand font-bold text-base mb-1.5">
+            <span data-i18n-en>Persona system</span>
+            <span data-i18n-zh>人设系统</span>
+          </h3>
+          <p class="text-gray-500 text-sm leading-relaxed">
+            <span data-i18n-en>Switch between custom prompts for different writing styles.</span>
+            <span data-i18n-zh>自定义润色 Prompt，一键切换不同写作风格。</span>
+          </p>
+        </div>
+
+        <!-- Floating indicator -->
+        <div class="bg-gray-50 rounded-2xl p-7 border border-gray-100">
+          <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center mb-4 border border-gray-100">
+            <svg class="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h3 class="font-brand font-bold text-base mb-1.5">
+            <span data-i18n-en>Floating indicator</span>
+            <span data-i18n-zh>浮窗提示</span>
+          </h3>
+          <p class="text-gray-500 text-sm leading-relaxed">
+            <span data-i18n-en>A small overlay shows live transcription and recording timer.</span>
+            <span data-i18n-zh>录音时悬浮窗实时展示识别文字和计时。</span>
+          </p>
+        </div>
+
+        <!-- System tray -->
+        <div class="bg-gray-50 rounded-2xl p-7 border border-gray-100">
+          <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center mb-4 border border-gray-100">
+            <svg class="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
+            </svg>
+          </div>
+          <h3 class="font-brand font-bold text-base mb-1.5">
+            <span data-i18n-en>System tray</span>
+            <span data-i18n-zh>系统托盘</span>
+          </h3>
+          <p class="text-gray-500 text-sm leading-relaxed">
+            <span data-i18n-en>Runs in the background, out of your way.</span>
+            <span data-i18n-zh>常驻后台，不占任务栏。</span>
+          </p>
         </div>
 
       </div>
     </div>
   </section>
 
+  <!-- Supported Engines -->
+  <section id="engines" class="py-20 px-6 bg-gray-50">
+    <div class="max-w-4xl mx-auto">
+      <h2 class="font-brand font-bold text-3xl md:text-4xl text-center mb-14 tracking-tight">
+        <span data-i18n-en>Supported Engines</span>
+        <span data-i18n-zh>支持引擎</span>
+      </h2>
+
+      <!-- ASR -->
+      <div class="mb-12">
+        <h3 class="font-brand font-bold text-xl mb-6">
+          <span data-i18n-en>Speech Recognition (ASR)</span>
+          <span data-i18n-zh>语音识别（ASR）</span>
+        </h3>
+        <div class="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-gray-100 text-left">
+                <th class="px-6 py-3.5 font-semibold text-gray-900">
+                  <span data-i18n-en>Provider</span>
+                  <span data-i18n-zh>供应商</span>
+                </th>
+                <th class="px-6 py-3.5 font-semibold text-gray-900">
+                  <span data-i18n-en>Status</span>
+                  <span data-i18n-zh>状态</span>
+                </th>
+                <th class="px-6 py-3.5 font-semibold text-gray-900 hidden sm:table-cell">
+                  <span data-i18n-en>Notes</span>
+                  <span data-i18n-zh>说明</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody class="text-gray-600">
+              <tr class="border-b border-gray-50">
+                <td class="px-6 py-3">
+                  <span data-i18n-en>Volcengine (Doubao Streaming 2.0)</span>
+                  <span data-i18n-zh>火山引擎（豆包流式 2.0）</span>
+                </td>
+                <td class="px-6 py-3"><span class="inline-flex items-center gap-1 text-emerald-600 font-medium"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg><span data-i18n-en>Supported</span><span data-i18n-zh>已支持</span></span></td>
+                <td class="px-6 py-3 hidden sm:table-cell">
+                  <span data-i18n-en>Chinese-optimized, low latency</span>
+                  <span data-i18n-zh>中文优化，低延迟</span>
+                </td>
+              </tr>
+              <tr class="border-b border-gray-50">
+                <td class="px-6 py-3">OpenAI Whisper</td>
+                <td class="px-6 py-3 text-gray-400">
+                  <span data-i18n-en>Planned</span>
+                  <span data-i18n-zh>计划中</span>
+                </td>
+                <td class="px-6 py-3 hidden sm:table-cell text-gray-400">
+                  <span data-i18n-en>Multilingual, strong noise handling</span>
+                  <span data-i18n-zh>多语言，抗噪能力强</span>
+                </td>
+              </tr>
+              <tr class="border-b border-gray-50">
+                <td class="px-6 py-3">Deepgram</td>
+                <td class="px-6 py-3 text-gray-400">
+                  <span data-i18n-en>Planned</span>
+                  <span data-i18n-zh>计划中</span>
+                </td>
+                <td class="px-6 py-3 hidden sm:table-cell text-gray-400">
+                  <span data-i18n-en>Fast, high accuracy</span>
+                  <span data-i18n-zh>速度快，准确率高</span>
+                </td>
+              </tr>
+              <tr class="border-b border-gray-50">
+                <td class="px-6 py-3">Google Cloud Speech-to-Text</td>
+                <td class="px-6 py-3 text-gray-400">
+                  <span data-i18n-en>Planned</span>
+                  <span data-i18n-zh>计划中</span>
+                </td>
+                <td class="px-6 py-3 hidden sm:table-cell text-gray-400">
+                  <span data-i18n-en>125+ languages</span>
+                  <span data-i18n-zh>支持 125+ 语言</span>
+                </td>
+              </tr>
+              <tr class="border-b border-gray-50">
+                <td class="px-6 py-3">Microsoft Azure Speech</td>
+                <td class="px-6 py-3 text-gray-400">
+                  <span data-i18n-en>Planned</span>
+                  <span data-i18n-zh>计划中</span>
+                </td>
+                <td class="px-6 py-3 hidden sm:table-cell text-gray-400">
+                  <span data-i18n-en>Custom vocabulary support</span>
+                  <span data-i18n-zh>支持自定义词汇</span>
+                </td>
+              </tr>
+              <tr>
+                <td class="px-6 py-3">
+                  <span data-i18n-en>iFlytek</span>
+                  <span data-i18n-zh>讯飞</span>
+                </td>
+                <td class="px-6 py-3 text-gray-400">
+                  <span data-i18n-en>Planned</span>
+                  <span data-i18n-zh>计划中</span>
+                </td>
+                <td class="px-6 py-3 hidden sm:table-cell text-gray-400">
+                  <span data-i18n-en>Leading Chinese recognition</span>
+                  <span data-i18n-zh>中文识别领先</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- LLM Polish -->
+      <div>
+        <h3 class="font-brand font-bold text-xl mb-6">
+          <span data-i18n-en>LLM Polish</span>
+          <span data-i18n-zh>LLM 润色</span>
+        </h3>
+        <div class="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-gray-100 text-left">
+                <th class="px-6 py-3.5 font-semibold text-gray-900">
+                  <span data-i18n-en>Provider</span>
+                  <span data-i18n-zh>供应商</span>
+                </th>
+                <th class="px-6 py-3.5 font-semibold text-gray-900">
+                  <span data-i18n-en>Status</span>
+                  <span data-i18n-zh>状态</span>
+                </th>
+                <th class="px-6 py-3.5 font-semibold text-gray-900 hidden sm:table-cell">
+                  <span data-i18n-en>Notes</span>
+                  <span data-i18n-zh>说明</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody class="text-gray-600">
+              <tr>
+                <td class="px-6 py-3">
+                  <span data-i18n-en>OpenAI-compatible API</span>
+                  <span data-i18n-zh>OpenAI 兼容 API</span>
+                </td>
+                <td class="px-6 py-3"><span class="inline-flex items-center gap-1 text-emerald-600 font-medium"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg><span data-i18n-en>Supported</span><span data-i18n-zh>已支持</span></span></td>
+                <td class="px-6 py-3 hidden sm:table-cell">
+                  <span data-i18n-en>Works with OpenAI, DeepSeek, Ollama, etc.</span>
+                  <span data-i18n-zh>适用于 OpenAI、DeepSeek、Ollama 等</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Download -->
-  <section id="download" class="py-24 px-6">
+  <section id="download" class="py-20 px-6">
     <div class="max-w-2xl mx-auto text-center">
-      <h2 class="font-brand font-bold text-3xl md:text-4xl mb-4 tracking-tight">下载 Sayble</h2>
-      <p class="text-gray-500 mb-10">当前版本 v0.2.1 · 支持 Windows 10/11</p>
+      <h2 class="font-brand font-bold text-3xl md:text-4xl mb-4 tracking-tight">
+        <span data-i18n-en>Download</span>
+        <span data-i18n-zh>下载</span>
+      </h2>
+      <p class="text-gray-500 mb-10">v0.2.1</p>
+
+      <!-- Platform table -->
+      <div class="bg-gray-50 rounded-2xl border border-gray-100 overflow-hidden mb-8 max-w-md mx-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-gray-100 text-left">
+              <th class="px-6 py-3.5 font-semibold text-gray-900">
+                <span data-i18n-en>Platform</span>
+                <span data-i18n-zh>平台</span>
+              </th>
+              <th class="px-6 py-3.5 font-semibold text-gray-900">
+                <span data-i18n-en>Status</span>
+                <span data-i18n-zh>状态</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody class="text-gray-600">
+            <tr class="border-b border-gray-50">
+              <td class="px-6 py-3">Windows</td>
+              <td class="px-6 py-3"><span class="inline-flex items-center gap-1 text-emerald-600 font-medium"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg><span data-i18n-en>Supported</span><span data-i18n-zh>支持</span></span></td>
+            </tr>
+            <tr class="border-b border-gray-50">
+              <td class="px-6 py-3">macOS</td>
+              <td class="px-6 py-3 text-gray-400">
+                <span data-i18n-en>Planned</span>
+                <span data-i18n-zh>计划中</span>
+              </td>
+            </tr>
+            <tr>
+              <td class="px-6 py-3">Linux</td>
+              <td class="px-6 py-3 text-gray-400">
+                <span data-i18n-en>Planned</span>
+                <span data-i18n-zh>计划中</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <a
         href="https://github.com/tdtdtq-ux/sayble/releases/latest"
         target="_blank"
@@ -143,9 +486,74 @@
         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3" />
         </svg>
-        Windows 版下载
+        <span data-i18n-en>Download for Windows</span>
+        <span data-i18n-zh>Windows 版下载</span>
       </a>
-      <p class="text-xs text-gray-400 mt-4">将跳转至 GitHub Releases 页面下载安装包</p>
+      <p class="text-xs text-gray-400 mt-4">
+        <span data-i18n-en>You'll be redirected to GitHub Releases.</span>
+        <span data-i18n-zh>将跳转至 GitHub Releases 页面。</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- Tech Stack -->
+  <section class="py-20 px-6 bg-gray-50">
+    <div class="max-w-3xl mx-auto">
+      <h2 class="font-brand font-bold text-3xl md:text-4xl text-center mb-14 tracking-tight">
+        <span data-i18n-en>Tech Stack</span>
+        <span data-i18n-zh>技术栈</span>
+      </h2>
+      <div class="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        <table class="w-full text-sm">
+          <tbody class="text-gray-600">
+            <tr class="border-b border-gray-50">
+              <td class="px-6 py-3 font-medium text-gray-900 w-1/3">
+                <span data-i18n-en>Framework</span>
+                <span data-i18n-zh>框架</span>
+              </td>
+              <td class="px-6 py-3">Tauri v2 (Rust + Web)</td>
+            </tr>
+            <tr class="border-b border-gray-50">
+              <td class="px-6 py-3 font-medium text-gray-900">
+                <span data-i18n-en>Frontend</span>
+                <span data-i18n-zh>前端</span>
+              </td>
+              <td class="px-6 py-3">React 19, TypeScript, Tailwind CSS 4, shadcn/ui</td>
+            </tr>
+            <tr class="border-b border-gray-50">
+              <td class="px-6 py-3 font-medium text-gray-900">
+                <span data-i18n-en>Backend</span>
+                <span data-i18n-zh>后端</span>
+              </td>
+              <td class="px-6 py-3">Rust</td>
+            </tr>
+            <tr class="border-b border-gray-50">
+              <td class="px-6 py-3 font-medium text-gray-900">ASR</td>
+              <td class="px-6 py-3">
+                <span data-i18n-en>Volcengine streaming ASR (WebSocket)</span>
+                <span data-i18n-zh>火山引擎流式 ASR（WebSocket）</span>
+              </td>
+            </tr>
+            <tr class="border-b border-gray-50">
+              <td class="px-6 py-3 font-medium text-gray-900">
+                <span data-i18n-en>Audio</span>
+                <span data-i18n-zh>音频采集</span>
+              </td>
+              <td class="px-6 py-3">cpal</td>
+            </tr>
+            <tr>
+              <td class="px-6 py-3 font-medium text-gray-900">
+                <span data-i18n-en>Input simulation</span>
+                <span data-i18n-zh>文字输出</span>
+              </td>
+              <td class="px-6 py-3">
+                <span data-i18n-en>enigo (keyboard) / arboard (clipboard)</span>
+                <span data-i18n-zh>enigo（键盘模拟）/ arboard（剪贴板）</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </section>
 
@@ -160,7 +568,7 @@
           <path d="M23 9a5 5 0 0 1 0 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none" opacity="0.55" />
           <path d="M26.5 6a9.5 9.5 0 0 1 0 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none" opacity="0.3" />
         </svg>
-        <span>&copy; 2025 Sayble</span>
+        <span>&copy; 2025 Sayble · MIT License</span>
       </div>
       <a href="https://github.com/tdtdtq-ux/sayble" target="_blank" rel="noopener noreferrer" class="hover:text-gray-600 transition-colors flex items-center gap-1.5">
         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
@@ -168,6 +576,44 @@
       </a>
     </div>
   </footer>
+
+  <!-- i18n Script -->
+  <script>
+    (function() {
+      var STORAGE_KEY = 'sayble-lang';
+
+      function getDefaultLang() {
+        var saved = localStorage.getItem(STORAGE_KEY);
+        if (saved === 'en' || saved === 'zh') return saved;
+        var nav = navigator.language || navigator.userLanguage || '';
+        return nav.startsWith('zh') ? 'zh' : 'en';
+      }
+
+      function setLang(lang) {
+        document.documentElement.setAttribute('data-lang', lang);
+        document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+        document.title = lang === 'zh'
+          ? 'Sayble — 开源语音输入工具'
+          : 'Sayble — Open-source Voice Typing';
+        var meta = document.querySelector('meta[name="description"]');
+        if (meta) {
+          meta.content = lang === 'zh'
+            ? '开源语音输入工具。自选引擎，按量付费，数据留在本地。'
+            : 'Open-source voice typing. Bring your own APIs. Pay per use. Your data stays on your machine.';
+        }
+        var btn = document.getElementById('lang-toggle');
+        if (btn) btn.textContent = lang === 'zh' ? 'EN' : '中文';
+        localStorage.setItem(STORAGE_KEY, lang);
+      }
+
+      setLang(getDefaultLang());
+
+      document.getElementById('lang-toggle').addEventListener('click', function() {
+        var current = document.documentElement.getAttribute('data-lang');
+        setLang(current === 'zh' ? 'en' : 'zh');
+      });
+    })();
+  </script>
 
 </body>
 </html>
