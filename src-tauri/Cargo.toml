@@ -1,6 +1,6 @@
 [package]
 name = "sayble"
-version = "0.1.0"
+version = "0.2.1"
 description = "Sayble - 跨平台桌面语音输入工具"
 authors = ["you"]
 edition = "2021"
