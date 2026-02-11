@@ -22,6 +22,7 @@ function App() {
   // 加载 settings
   useEffect(() => {
     useSettingsStore.getState().loadSettings();
+    useSettingsStore.getState().checkUpdate();
   }, []);
 
   // 监听托盘"关于"事件

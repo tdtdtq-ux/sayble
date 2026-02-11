@@ -1,6 +1,17 @@
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { type LucideIcon } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { AppIcon } from "./AppIcon";
+import { useSettingsStore } from "@/stores/useSettingsStore";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 export interface ShellMenuItem {
   key: string;
@@ -17,6 +28,9 @@ interface ShellLayoutProps {
 }
 
 export function ShellLayout({ menuItems, activeTab, onTabChange, footer, children }: ShellLayoutProps) {
+  const updateAvailable = useSettingsStore((s) => s.updateAvailable);
+  const [showUpdateDialog, setShowUpdateDialog] = useState(false);
+
   return (
     <div className="h-full flex">
       {/* 左侧菜单 */}
@@ -25,6 +39,14 @@ export function ShellLayout({ menuItems, activeTab, onTabChange, footer, childre
           <h1 className="text-2xl font-bold flex items-center gap-3">
             <AppIcon className="size-9" />
             <span className="font-brand">Sayble</span>
+            {updateAvailable && (
+              <button
+                onClick={() => setShowUpdateDialog(true)}
+                className="rounded-md bg-emerald-500 px-2 py-0.5 text-xs font-medium text-white hover:bg-emerald-600 transition-colors cursor-pointer"
+              >
+                新版本
+              </button>
+            )}
           </h1>
         </div>
         <nav className="flex-1 px-3 flex flex-col gap-1">
@@ -50,6 +72,27 @@ export function ShellLayout({ menuItems, activeTab, onTabChange, footer, childre
       <div className="flex-1 min-w-0 flex flex-col">
         {children}
       </div>
+
+      <Dialog open={showUpdateDialog} onOpenChange={(open) => !open && setShowUpdateDialog(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>发现新版本</DialogTitle>
+            <DialogDescription>
+              Sayble {updateAvailable?.version} 已发布，点击下方按钮前往下载页面。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowUpdateDialog(false)}>
+              取消
+            </Button>
+            <Button onClick={() => {
+              if (updateAvailable) openUrl(updateAvailable.url);
+            }}>
+              前往下载
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

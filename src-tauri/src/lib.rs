@@ -701,6 +701,7 @@ pub fn run() {
             cmd_load_history,
             cmd_clear_history,
             cmd_remove_history,
+            cmd_check_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -1160,4 +1161,64 @@ fn cmd_remove_history(app: tauri::AppHandle, timestamp: String) -> Result<(), St
     let store = app.state::<AppStore>();
     store.remove_history(&timestamp);
     Ok(())
+}
+
+/// 检查 GitHub Release 最新版本，如果有更新返回下载链接
+#[tauri::command]
+async fn cmd_check_update() -> Result<Option<String>, String> {
+    log::info!("[cmd] check_update called");
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    struct GithubRelease {
+        tag_name: String,
+        html_url: String,
+    }
+
+    let client = reqwest::Client::new();
+    let url = "https://api.github.com/repos/tdtdtq-ux/sayble/releases/latest";
+    log::debug!("[cmd] check_update: requesting {}", url);
+
+    let resp = client
+        .get(url)
+        .header("User-Agent", "Sayble")
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| {
+            log::error!("[cmd] check_update: request failed: {}", e);
+            format!("网络请求失败: {}", e)
+        })?;
+
+    let status = resp.status();
+    log::debug!("[cmd] check_update: response status: {}", status);
+
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        log::error!("[cmd] check_update: GitHub API error {}, body: {}", status, body);
+
+        if status.as_u16() == 403 && body.contains("rate limit") {
+            return Err("GitHub API 速率限制已超出，请稍后再试".to_string());
+        }
+
+        return Err(format!("GitHub API 返回错误: {}", status));
+    }
+
+    let release: GithubRelease = resp.json().await.map_err(|e| {
+        log::error!("[cmd] check_update: parse response failed: {}", e);
+        format!("解析响应失败: {}", e)
+    })?;
+
+    let current_version = env!("CARGO_PKG_VERSION");
+    let latest_version = release.tag_name.strip_prefix('v').unwrap_or(&release.tag_name);
+
+    log::info!("[cmd] check_update: current={}, latest={}", current_version, latest_version);
+
+    if latest_version > current_version {
+        log::info!("[cmd] check_update: new version available, url={}", release.html_url);
+        Ok(Some(release.html_url))
+    } else {
+        log::info!("[cmd] check_update: already up to date");
+        Ok(None)
+    }
 }

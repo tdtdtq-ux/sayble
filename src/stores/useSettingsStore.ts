@@ -24,6 +24,10 @@ interface SettingsStore {
   setAutostartWarning: (source: string | null) => void;
   dismissAutostartWarning: () => void;
 
+  // 更新检查
+  updateAvailable: { version: string; url: string } | null;
+  checkUpdate: () => Promise<void>;
+
   // ---- 动作 ----
   loadSettings: () => Promise<void>;
 
@@ -83,6 +87,20 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     }
   },
   dismissAutostartWarning: () => set({ autostartWarning: null }),
+
+  updateAvailable: null,
+  checkUpdate: async () => {
+    try {
+      const result = await invoke<string | null>("cmd_check_update");
+      if (result) {
+        const tag = result.split("/").pop() || "";
+        const version = tag.startsWith("v") ? tag : `v${tag}`;
+        set({ updateAvailable: { version, url: result } });
+      }
+    } catch (e) {
+      console.error("[check_update] failed:", e);
+    }
+  },
 
   loadSettings: async () => {
     if (get().loaded) return;

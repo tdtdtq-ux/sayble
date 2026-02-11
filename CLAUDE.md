@@ -38,9 +38,10 @@ React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 多窗口架构，通过 URL 参数 `?window=floating` 区分窗口类型：
 
 - **main.tsx** → 入口，根据 URL 参数渲染 `<App />` 或 `<FloatingApp />`
-- **App.tsx** → 主窗口根组件，页面路由（Dashboard / Settings）、自启动检测、警告条展示。挂载时调用 `useSettingsStore.getState().loadSettings()` 加载全局设置
-- **Dashboard.tsx** — 首页框架（左侧菜单 + 首页/人设切换）
-- **Settings.tsx** — 设置页框架（左侧菜单 + tab 路由），菜单项：识别引擎 / 润色引擎 / 通用 / 关于
+- **App.tsx** → 主窗口根组件，页面路由（Dashboard / Settings）、自启动检测、警告条展示。挂载时调用 `loadSettings()` 加载全局设置并调用 `checkUpdate()` 检查更新
+- **ShellLayout.tsx** — Dashboard 和 Settings 共用的壳布局（左侧菜单 + 右侧内容区）。有新版本时 logo 旁显示绿色"新版本"徽章，点击弹出更新 Dialog
+- **Dashboard.tsx** — 首页框架（基于 ShellLayout，首页/人设切换）
+- **Settings.tsx** — 设置页框架（基于 ShellLayout，tab 路由），菜单项：识别引擎 / 润色引擎 / 通用 / 关于
 - **VoiceSettings.tsx** — 识别引擎（内建供应商列表、左右分栏内联编辑、连接测试）
 - **GeneralSettings.tsx** — 通用设置（垂直布局：输出/快捷键/数据三个区块）
 - **general/GeneralHome.tsx** — 输出设置区块（输出方式、麦克风、自动输出、自启动）
@@ -58,7 +59,7 @@ React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 
 使用 [Zustand](https://github.com/pmndrs/zustand) 进行全局状态管理。核心 store：
 
-- **`src/stores/useSettingsStore.ts`** — 统一管理 `appSettings`、`asrSettings`、`polishSettings` 及 UI 状态（`autostartWarning`）。所有写操作触发同一个 500ms 防抖 `debouncedSave()`，全量序列化到后端 `cmd_save_settings`。`loadSettings()` 在 App.tsx 挂载时调用一次，内部有 `loaded` 标志防重。
+- **`src/stores/useSettingsStore.ts`** — 统一管理 `appSettings`、`asrSettings`、`polishSettings` 及 UI 状态（`autostartWarning`、`updateAvailable`）。所有写操作触发同一个 500ms 防抖 `debouncedSave()`，全量序列化到后端 `cmd_save_settings`。`loadSettings()` 在 App.tsx 挂载时调用一次，内部有 `loaded` 标志防重。`checkUpdate()` 调用后端 `cmd_check_update`，有新版本时将 `{ version, url }` 存入 `updateAvailable`，供 ShellLayout 和 About 页面读取。
 
 设置持久化通过后端 IPC（`cmd_load_settings` / `cmd_save_settings`）全量读写 `settings.json`。跨窗口通信使用 Tauri 事件系统。
 
@@ -100,13 +101,16 @@ Rust，按功能模块划分：
 - `cmd_get_data_dir()` — 返回数据目录路径（settings、logs）
 - `cmd_load_history()` — 加载识别历史记录（倒序，最新在前）
 - `cmd_clear_history()` — 清空识别历史记录
+- `cmd_check_update()` — 检查 GitHub Release 最新版本（GET `repos/{owner}/{repo}/releases/latest`），返回下载页 URL 或 None
+- `cmd_check_autostart()` — 检测自启动是否被第三方软件禁用
+- `cmd_restore_autostart()` — 恢复自启动注册表项
 
 ### 关键依赖
 
 - **tokio-tungstenite** — ASR WebSocket 通信
 - **cpal** — 跨平台音频 I/O
 - **enigo** — 跨平台键盘模拟
-- **reqwest** — HTTP client（润色供应商连接测试、后续 OpenAI API 调用）
+- **reqwest** — HTTP client（润色供应商连接测试、OpenAI API 调用、GitHub Release 更新检查）
 - **windows** crate (0.58) — Windows 底层 API（钩子、输入）
 
 ## Testing
