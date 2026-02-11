@@ -89,7 +89,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   dismissAutostartWarning: () => set({ autostartWarning: null }),
 
   updateAvailable: null,
+  _updateChecked: false,
   checkUpdate: async () => {
+    if (get()._updateChecked) return;
+    set({ _updateChecked: true });
     try {
       const result = await invoke<string | null>("cmd_check_update");
       if (result) {
@@ -114,7 +117,12 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
             next.appSettings = { ...state.appSettings, ...(result.app_settings as Partial<AppSettings>) };
           }
           if (result.asr_settings) {
-            next.asrSettings = { ...state.asrSettings, ...(result.asr_settings as Partial<AsrSettings>) };
+            const loaded = result.asr_settings as Partial<AsrSettings>;
+            const mergedProviders = {
+              ...state.asrSettings.providers,
+              ...(loaded.providers ?? {}),
+            };
+            next.asrSettings = { ...state.asrSettings, ...loaded, providers: mergedProviders };
           }
           if (result.polish_settings) {
             const loaded = result.polish_settings as Partial<PolishSettings>;

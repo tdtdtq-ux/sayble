@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -13,15 +13,24 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { platform } from "@tauri-apps/plugin-os";
 import { Check, Plug, Eye, EyeOff, ExternalLink } from "lucide-react";
 import { builtinAsrProviders, type AsrProviderMeta, type AsrProviderType } from "@/types/asr";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 
+const currentPlatform = platform();
+
 export function VoiceSettings() {
   const { asrSettings, updateAsrSettings } = useSettingsStore();
 
+  // 按当前平台过滤供应商列表
+  const filteredProviders = useMemo(
+    () => builtinAsrProviders.filter((p) => !p.platform || p.platform === currentPlatform),
+    []
+  );
+
   const [activeType, setActiveType] = useState<AsrProviderType>(
-    builtinAsrProviders[0]?.type ?? ("" as AsrProviderType)
+    filteredProviders[0]?.type ?? ("" as AsrProviderType)
   );
   const [testingType, setTestingType] = useState<AsrProviderType | null>(null);
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -29,7 +38,7 @@ export function VoiceSettings() {
   const [showPassword, setShowPassword] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const activeMeta = builtinAsrProviders.find((p) => p.type === activeType);
+  const activeMeta = filteredProviders.find((p) => p.type === activeType);
   const activeConfig = asrSettings.providers[activeType] ?? {};
 
   const updateConfig = (key: string, value: string) => {
@@ -185,7 +194,7 @@ export function VoiceSettings() {
       <div className="flex flex-1 min-h-0">
         {/* 左侧列表 */}
         <div className="w-48 shrink-0 overflow-y-auto custom-scrollbar space-y-1.5 pb-4 pl-6">
-          {builtinAsrProviders.map((meta) => (
+          {filteredProviders.map((meta) => (
             <button
               key={meta.type}
               onClick={() => setActiveType(meta.type)}
@@ -260,7 +269,11 @@ export function VoiceSettings() {
 
             {/* 字段详情 */}
             <div className="space-y-3 bg-muted/50 rounded-md p-4">
-              {activeMeta.fields.map((field) => renderField(field))}
+              {activeMeta.fields.length > 0 ? (
+                activeMeta.fields.map((field) => renderField(field))
+              ) : (
+                <p className="text-sm text-muted-foreground">此引擎无需配置，选择后即可使用</p>
+              )}
             </div>
           </div>
         ) : (

@@ -1,5 +1,5 @@
 // ASR Provider 类型标识
-export type AsrProviderType = "volcengine";
+export type AsrProviderType = "sapi" | "volcengine";
 
 // 表单字段描述，驱动动态表单渲染
 export interface AsrProviderField {
@@ -19,6 +19,7 @@ export interface AsrProviderMeta {
   description: string;
   docUrl?: string;
   fields: AsrProviderField[];
+  platform?: "windows" | "macos" | "linux"; // 仅在指定平台显示
 }
 
 // 用户填写的认证信息
@@ -32,6 +33,13 @@ export interface AsrSettings {
 
 // 内建 Provider 注册表
 export const builtinAsrProviders: AsrProviderMeta[] = [
+  {
+    type: "sapi",
+    name: "Windows 语音识别",
+    description: "使用 Windows 内建语音识别，无需配置密钥，需安装对应语言包",
+    fields: [],
+    platform: "windows",
+  },
   {
     type: "volcengine",
     name: "豆包识别2.0",
@@ -77,8 +85,9 @@ export const builtinAsrProviders: AsrProviderMeta[] = [
 
 // 默认 ASR 设置
 export const defaultAsrSettings: AsrSettings = {
-  selectedProvider: "volcengine",
+  selectedProvider: "sapi",
   providers: {
+    sapi: {},
     volcengine: {
       appId: "",
       accessKey: "",

@@ -2,7 +2,8 @@ use sayble_lib::config::*;
 use sayble_lib::asr::protocol::*;
 use sayble_lib::audio::AudioCapture;
 use sayble_lib::asr::VolcEngineAsr;
-use sayble_lib::asr::volcengine::{AsrEvent, run_asr_session};
+use sayble_lib::asr::volcengine::run_asr_session;
+use sayble_lib::asr::AsrEvent;
 
 /// 集成测试：完整配置 → ASR 验证 → 状态流转
 #[test]
@@ -300,7 +301,7 @@ async fn test_asr_with_mp3_file() {
                     AsrEvent::PartialResult(text) => {
                         println!("  Partial: {}", text);
                     }
-                    AsrEvent::FinalResult(text) => {
+                    AsrEvent::FinalResult(text, _duration) => {
                         println!("  Final: {}", text);
                         final_text = text;
                         break;

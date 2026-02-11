@@ -7,7 +7,8 @@ pub mod polish;
 pub mod store;
 pub mod tray;
 
-use asr::volcengine::{AsrEvent, VolcEngineAsr};
+use asr::AsrEvent;
+use asr::volcengine::VolcEngineAsr;
 use audio::AudioCapture;
 use config::{AppConfig, AsrConfig, HotkeyBinding, HotkeyConfig, OutputMode};
 use hotkey::HotkeyManager;
@@ -225,6 +226,13 @@ struct RecordingFlag {
     cancelled: Arc<AtomicBool>,
 }
 
+/// 录音配置枚举，区分不同 ASR 引擎
+enum RecordingConfig {
+    Volcengine { asr_config: AsrConfig, device_name: String },
+    #[cfg(target_os = "windows")]
+    Sapi,
+}
+
 /// 从前端快捷键标签字符串解析为 HotkeyConfig 列表
 fn parse_hotkey_configs(toggle_label: &str) -> Vec<HotkeyConfig> {
     let mut configs = Vec::new();
@@ -273,16 +281,8 @@ fn output_text_from_store(app: &tauri::AppHandle, text: &str) {
 }
 
 /// 从持久化 store 中读取录音相关设置
-fn load_recording_settings_from_store(app: &tauri::AppHandle) -> Result<(AsrConfig, String), String> {
+fn load_recording_settings_from_store(app: &tauri::AppHandle) -> Result<RecordingConfig, String> {
     let store = app.state::<AppStore>();
-
-    // 从 app_settings 读取麦克风设备
-    let app_settings = store.settings().get("app_settings");
-    let device_name = app_settings.as_ref()
-        .and_then(|s| s.get("microphoneDevice"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
 
     // 从 asr_settings 读取 ASR 配置
     let asr_settings = store.settings().get("asr_settings")
@@ -291,6 +291,20 @@ fn load_recording_settings_from_store(app: &tauri::AppHandle) -> Result<(AsrConf
     let selected_provider = asr_settings.get("selectedProvider")
         .and_then(|v| v.as_str())
         .unwrap_or("volcengine");
+
+    // SAPI 引擎无需额外配置
+    #[cfg(target_os = "windows")]
+    if selected_provider == "sapi" {
+        return Ok(RecordingConfig::Sapi);
+    }
+
+    // 从 app_settings 读取麦克风设备
+    let app_settings = store.settings().get("app_settings");
+    let device_name = app_settings.as_ref()
+        .and_then(|s| s.get("microphoneDevice"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
 
     let providers = asr_settings.get("providers")
         .and_then(|v| v.as_object());
@@ -310,7 +324,6 @@ fn load_recording_settings_from_store(app: &tauri::AppHandle) -> Result<(AsrConf
         .map(|v| v == "true")
         .unwrap_or(true);
 
-    // 当前只支持 volcengine
     let app_id = credentials.get("appId").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let access_key = credentials.get("accessKey").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
@@ -325,7 +338,7 @@ fn load_recording_settings_from_store(app: &tauri::AppHandle) -> Result<(AsrConf
         auto_punctuation,
     };
 
-    Ok((asr_config, device_name))
+    Ok(RecordingConfig::Volcengine { asr_config, device_name })
 }
 
 /// 从持久化 store 中读取快捷键标签，解析为 HotkeyConfig 列表
@@ -472,6 +485,7 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -601,14 +615,14 @@ pub fn run() {
                             HotkeyEvent::StartRecording => {
                                 log::info!("[hotkey-forward] StartRecording: reading settings from store");
                                 match load_recording_settings_from_store(&hotkey_handle) {
-                                    Ok((asr_config, device_name)) => {
+                                    Ok(recording_config) => {
                                         // 先通知浮窗开始（让浮窗立即显示）
                                         let _ = hotkey_handle.emit("floating-control", serde_json::json!({
                                             "action": "start",
                                         }));
 
                                         // 直接调用录音启动
-                                        match start_recording_inner(&hotkey_handle, &hotkey_flag, asr_config, device_name) {
+                                        match start_recording_inner(&hotkey_handle, &hotkey_flag, recording_config) {
                                             Ok(session_id) => {
                                                 recording_start_time = Some(std::time::Instant::now());
                                                 log::info!("[hotkey-forward] recording started, session_id={}", session_id);
@@ -764,8 +778,15 @@ async fn cmd_test_asr_connection(
     provider_type: String,
     credentials: serde_json::Value,
 ) -> Result<String, String> {
-    // 当前只支持 volcengine
     match provider_type.as_str() {
+        #[cfg(target_os = "windows")]
+        "sapi" => {
+            tokio::task::spawn_blocking(|| {
+                asr::sapi::test_sapi_available()
+            })
+            .await
+            .map_err(|e| format!("任务执行失败: {}", e))?
+        }
         "volcengine" => {
             let app_id = credentials.get("appId").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let access_key = credentials.get("accessKey").and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -873,6 +894,14 @@ fn cmd_load_settings(app: tauri::AppHandle) -> Result<serde_json::Value, String>
     for (k, v) in store.settings().entries() {
         map.insert(k, v);
     }
+
+    // 确保内建零配置引擎（如 sapi）在 providers 中有条目
+    if let Some(asr) = map.get_mut("asr_settings").and_then(|v| v.as_object_mut()) {
+        if let Some(providers) = asr.get_mut("providers").and_then(|v| v.as_object_mut()) {
+            providers.entry("sapi").or_insert_with(|| serde_json::json!({}));
+        }
+    }
+
     Ok(serde_json::Value::Object(map))
 }
 
@@ -880,10 +909,9 @@ fn cmd_load_settings(app: tauri::AppHandle) -> Result<serde_json::Value, String>
 fn start_recording_inner(
     app: &tauri::AppHandle,
     flag: &Arc<Mutex<RecordingFlag>>,
-    asr_config: AsrConfig,
-    device_name: String,
+    config: RecordingConfig,
 ) -> Result<u64, String> {
-    log::info!("[recording] start_recording_inner called, device={}", device_name);
+    log::info!("[recording] start_recording_inner called");
     // 如果上一次录音还没结束，先强制停掉旧会话
     {
         let mut f = flag.lock().map_err(|e| e.to_string())?;
@@ -897,8 +925,6 @@ fn start_recording_inner(
         }
     }
 
-    VolcEngineAsr::validate_config(&asr_config)?;
-
     // 分配新 session_id，并重置 cancelled 标志
     let (session_id, cancelled) = {
         let mut f = flag.lock().map_err(|e| e.to_string())?;
@@ -909,88 +935,132 @@ fn start_recording_inner(
         (new_id, Arc::clone(&f.cancelled))
     };
 
-    // 1. 构建 channel，直接调用 run_asr_session（在 Tauri 的 tokio runtime 中）
+    // 构建事件 channel（所有引擎共用）
     let (event_tx, event_rx) = std::sync::mpsc::channel::<AsrEvent>();
-    let (audio_tx, audio_rx) = tokio::sync::mpsc::channel::<Vec<i16>>(100);
-    let is_running = Arc::new(Mutex::new(true));
 
-    // 2. 在 Tauri 的 tokio runtime 里 spawn ASR 会话
-    let event_tx_clone = event_tx.clone();
-    let is_running_clone = is_running.clone();
-    tauri::async_runtime::spawn(async move {
-        if let Err(e) =
-            asr::volcengine::run_asr_session(asr_config, event_tx_clone.clone(), audio_rx, is_running_clone).await
-        {
-            let _ = event_tx_clone.send(AsrEvent::Error(e));
-        }
-    });
-
-    // 3. 用一个 stop channel 来控制停止
+    // 用一个 stop channel 来控制停止
     let (stop_tx, stop_rx) = std::sync::mpsc::channel::<()>();
 
-    // 4. 在独立线程中启动音频采集并桥接到 ASR
-    let flag_clone = Arc::clone(flag);
-    let is_running_clone2 = is_running.clone();
-    let my_session_id = session_id;
-    std::thread::spawn(move || {
-        let mut audio_capture = AudioCapture::new();
-        let capture_rx = match audio_capture.start(&device_name) {
-            Ok(rx) => rx,
-            Err(e) => {
-                log::error!("[audio] failed to start capture: {}", e);
-                let _ = event_tx.send(AsrEvent::Error(format!("麦克风启动失败: {}", e)));
+    // 判断是否为流式多句引擎（如 SAPI），影响 asr-forward 的 FinalResult 处理
+    #[cfg(target_os = "windows")]
+    let is_streaming_engine = matches!(&config, RecordingConfig::Sapi);
+    #[cfg(not(target_os = "windows"))]
+    let is_streaming_engine = false;
+
+    match config {
+        RecordingConfig::Volcengine { asr_config, device_name } => {
+            log::info!("[recording] using Volcengine engine, device={}", device_name);
+            VolcEngineAsr::validate_config(&asr_config)?;
+
+            let (audio_tx, audio_rx) = tokio::sync::mpsc::channel::<Vec<i16>>(100);
+            let is_running = Arc::new(Mutex::new(true));
+
+            // 在 Tauri 的 tokio runtime 里 spawn ASR 会话
+            let event_tx_clone = event_tx.clone();
+            let is_running_clone = is_running.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) =
+                    asr::volcengine::run_asr_session(asr_config, event_tx_clone.clone(), audio_rx, is_running_clone).await
+                {
+                    let _ = event_tx_clone.send(AsrEvent::Error(e));
+                }
+            });
+
+            // 在独立线程中启动音频采集并桥接到 ASR
+            let flag_clone = Arc::clone(flag);
+            let is_running_clone2 = is_running.clone();
+            let my_session_id = session_id;
+            std::thread::spawn(move || {
+                let mut audio_capture = AudioCapture::new();
+                let capture_rx = match audio_capture.start(&device_name) {
+                    Ok(rx) => rx,
+                    Err(e) => {
+                        log::error!("[audio] failed to start capture: {}", e);
+                        let _ = event_tx.send(AsrEvent::Error(format!("麦克风启动失败: {}", e)));
+                        if let Ok(mut f) = flag_clone.lock() {
+                            if f.session_id == my_session_id {
+                                f.is_recording = false;
+                                f.stop_tx = None;
+                            }
+                        }
+                        return;
+                    }
+                };
+
+                // 转发音频数据到 ASR
+                loop {
+                    if stop_rx.try_recv().is_ok() {
+                        break;
+                    }
+                    match capture_rx.recv_timeout(std::time::Duration::from_millis(100)) {
+                        Ok(samples) => {
+                            if audio_tx.blocking_send(samples).is_err() {
+                                break;
+                            }
+                        }
+                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                    }
+                }
+
+                // 停止采集，drop audio_tx 触发 ASR 发送 last frame
+                audio_capture.stop();
+                drop(audio_tx);
+
+                if let Ok(mut running) = is_running_clone2.lock() {
+                    *running = false;
+                }
+
                 if let Ok(mut f) = flag_clone.lock() {
-                    // 只有 session_id 匹配时才清理，防止覆盖新录音的状态
                     if f.session_id == my_session_id {
                         f.is_recording = false;
                         f.stop_tx = None;
                     }
                 }
-                return;
-            }
-        };
+            });
+        }
 
-        // 转发音频数据到 ASR
-        loop {
-            if stop_rx.try_recv().is_ok() {
-                break;
-            }
-            match capture_rx.recv_timeout(std::time::Duration::from_millis(100)) {
-                Ok(samples) => {
-                    if audio_tx.blocking_send(samples).is_err() {
-                        break;
+        #[cfg(target_os = "windows")]
+        RecordingConfig::Sapi => {
+            log::info!("[recording] using SAPI engine");
+            let flag_clone = Arc::clone(flag);
+            let is_running = Arc::new(Mutex::new(true));
+            let is_running_clone = is_running.clone();
+            let my_session_id = session_id;
+
+            // SAPI 在独立 OS 线程运行（COM STA 要求），不使用 cpal 采集
+            std::thread::spawn(move || {
+                // 等待 stop 信号的监控线程
+                let is_running_stop = is_running.clone();
+                std::thread::spawn(move || {
+                    let _ = stop_rx.recv(); // 阻塞直到收到停止信号
+                    if let Ok(mut running) = is_running_stop.lock() {
+                        *running = false;
+                    }
+                });
+
+                asr::sapi::run_sapi_session(event_tx, is_running_clone);
+
+                if let Ok(mut f) = flag_clone.lock() {
+                    if f.session_id == my_session_id {
+                        f.is_recording = false;
+                        f.stop_tx = None;
                     }
                 }
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
-                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
-            }
+            });
         }
+    }
 
-        // 停止采集，drop audio_tx 触发 ASR 发送 last frame
-        audio_capture.stop();
-        drop(audio_tx);
-
-        if let Ok(mut running) = is_running_clone2.lock() {
-            *running = false;
-        }
-
-        if let Ok(mut f) = flag_clone.lock() {
-            // 只有 session_id 匹配时才清理，防止覆盖新录音的状态
-            if f.session_id == my_session_id {
-                f.is_recording = false;
-                f.stop_tx = None;
-            }
-        }
-    });
-
-    // 5. 后台 tokio task：轮询 ASR 事件并 emit 到前端
+    // 后台 tokio task：轮询 ASR 事件并 emit 到前端
     //    每个事件包装为 { sessionId, event }，Disconnected 内部消化，新增 Finished
     let app_clone = app.clone();
     tauri::async_runtime::spawn(async move {
-        log::debug!("[asr-forward] session {} forward task started", session_id);
+        log::debug!("[asr-forward] session {} forward task started (streaming={})", session_id, is_streaming_engine);
         let mut last_partial_text = String::new();
         let mut had_final = false;
         let mut terminated = false;
+        // 流式引擎（SAPI）累积已确认的句子文本，等 Disconnected 时统一输出
+        let mut accumulated_text = String::new();
         loop {
             match event_rx.try_recv() {
                 Ok(event) => {
@@ -1003,28 +1073,54 @@ fn start_recording_inner(
                             }));
                         }
                         AsrEvent::PartialResult(text) => {
-                            last_partial_text = text.clone();
-                            let _ = app_clone.emit("asr-event", serde_json::json!({
-                                "sessionId": session_id,
-                                "event": serde_json::to_value(&event).unwrap_or_default()
-                            }));
+                            if is_streaming_engine {
+                                // 流式引擎：浮窗显示 已累积文本 + 当前 partial
+                                let display = if accumulated_text.is_empty() {
+                                    text.clone()
+                                } else {
+                                    format!("{}{}", accumulated_text, text)
+                                };
+                                last_partial_text = display.clone();
+                                let _ = app_clone.emit("asr-event", serde_json::json!({
+                                    "sessionId": session_id,
+                                    "event": {"PartialResult": display}
+                                }));
+                            } else {
+                                last_partial_text = text.clone();
+                                let _ = app_clone.emit("asr-event", serde_json::json!({
+                                    "sessionId": session_id,
+                                    "event": serde_json::to_value(&event).unwrap_or_default()
+                                }));
+                            }
                         }
                         #[allow(unused_assignments)]
                         AsrEvent::FinalResult(text, duration_ms) => {
                             had_final = true;
-                            log::info!("[asr-forward] FinalResult received, text_len={}, duration_ms={:?}", text.len(), duration_ms);
-                            if cancelled.load(Ordering::SeqCst) {
-                                log::info!("[asr-forward] session {} cancelled, skipping output", session_id);
+                            log::info!("[asr-forward] FinalResult received, text_len={}, duration_ms={:?}, streaming={}", text.len(), duration_ms, is_streaming_engine);
+
+                            if is_streaming_engine {
+                                // 流式引擎：累积文本，不 break，等 Disconnected
+                                accumulated_text.push_str(text);
+                                // 更新浮窗显示累积文本
+                                let _ = app_clone.emit("asr-event", serde_json::json!({
+                                    "sessionId": session_id,
+                                    "event": {"PartialResult": &accumulated_text}
+                                }));
                             } else {
-                                app_clone.state::<AppStore>().accumulate_stats(text.chars().count(), *duration_ms);
-                                polish_and_output(&app_clone, session_id, text).await;
+                                // 单次引擎（火山引擎）：直接输出并结束
+                                if cancelled.load(Ordering::SeqCst) {
+                                    log::info!("[asr-forward] session {} cancelled, skipping output", session_id);
+                                } else {
+                                    app_clone.state::<AppStore>().accumulate_stats(text.chars().count(), *duration_ms);
+                                    polish_and_output(&app_clone, session_id, text).await;
+                                }
+                                let _ = app_clone.emit("asr-event", serde_json::json!({
+                                    "sessionId": session_id,
+                                    "event": "Finished"
+                                }));
+                                terminated = true;
+                                break;
                             }
-                            let _ = app_clone.emit("asr-event", serde_json::json!({
-                                "sessionId": session_id,
-                                "event": "Finished"
-                            }));
-                            terminated = true;
-                            break;
                         }
                         AsrEvent::Error(_) => {
                             let _ = app_clone.emit("asr-event", serde_json::json!({
@@ -1043,6 +1139,11 @@ fn start_recording_inner(
                             // 内部消化：不暴露给前端
                             if cancelled.load(Ordering::SeqCst) {
                                 log::info!("[asr-forward] session {} cancelled, skipping output on disconnect", session_id);
+                            } else if is_streaming_engine && !accumulated_text.is_empty() {
+                                // 流式引擎：Disconnected 时统一输出累积文本
+                                log::info!("[asr-forward] session {} streaming disconnect, outputting accumulated text len={}", session_id, accumulated_text.len());
+                                app_clone.state::<AppStore>().accumulate_stats(accumulated_text.chars().count(), None);
+                                polish_and_output(&app_clone, session_id, &accumulated_text).await;
                             } else if !had_final {
                                 if !last_partial_text.is_empty() {
                                     app_clone.state::<AppStore>().accumulate_stats(last_partial_text.chars().count(), None);
@@ -1071,6 +1172,12 @@ fn start_recording_inner(
         }
         // channel 断开且没收到过终止事件时，补发 Finished 确保前端不会卡住
         if !terminated {
+            // 流式引擎 channel 断开时也要输出累积文本
+            if is_streaming_engine && !accumulated_text.is_empty() && !cancelled.load(Ordering::SeqCst) {
+                log::info!("[asr-forward] session {} channel ended, outputting accumulated text len={}", session_id, accumulated_text.len());
+                app_clone.state::<AppStore>().accumulate_stats(accumulated_text.chars().count(), None);
+                polish_and_output(&app_clone, session_id, &accumulated_text).await;
+            }
             log::warn!("[asr-forward] session {} channel ended without terminal event, sending Finished", session_id);
             let _ = app_clone.emit("asr-event", serde_json::json!({
                 "sessionId": session_id,
@@ -1096,8 +1203,8 @@ async fn cmd_start_recording(
     flag: tauri::State<'_, Arc<Mutex<RecordingFlag>>>,
 ) -> Result<(), String> {
     log::info!("[cmd] start_recording called");
-    let (asr_config, device_name) = load_recording_settings_from_store(&app)?;
-    start_recording_inner(&app, &flag, asr_config, device_name)?;
+    let recording_config = load_recording_settings_from_store(&app)?;
+    start_recording_inner(&app, &flag, recording_config)?;
     Ok(())
 }
 

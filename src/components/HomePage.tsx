@@ -43,8 +43,11 @@ export function HomePage({ onNavigate, onOpenSettings }: HomePageProps) {
 
   // 当前 ASR 供应商名称
   const asrProviderName = builtinAsrProviders.find((p) => p.type === asrSettings.selectedProvider)?.name ?? "未配置";
-  const asrConfig = asrSettings.providers[asrSettings.selectedProvider];
-  const asrConfigured = asrConfig?.appId && asrConfig?.accessKey;
+  const asrMeta = builtinAsrProviders.find((p) => p.type === asrSettings.selectedProvider);
+  const asrConfig = asrSettings.providers[asrSettings.selectedProvider] ?? {};
+  const asrConfigured = asrMeta
+    ? asrMeta.fields.filter((f) => f.required).every((f) => asrConfig[f.key]?.trim())
+    : false;
 
   // 当前人设名称
   const selectedPrompt = polishSettings.prompts.find((p) => p.id === polishSettings.selectedPromptId);
@@ -179,9 +182,9 @@ export function HomePage({ onNavigate, onOpenSettings }: HomePageProps) {
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-sm font-medium truncate">
-                {polishSettings.enabled && selectedPolishProvider
+                {selectedPolishProvider
                   ? selectedPolishProvider.name
-                  : <span className="text-muted-foreground">未启用</span>}
+                  : <span className="text-muted-foreground">未配置</span>}
               </div>
               <div className="text-xs text-muted-foreground mt-0.5">润色引擎</div>
             </div>
@@ -196,9 +199,9 @@ export function HomePage({ onNavigate, onOpenSettings }: HomePageProps) {
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-sm font-medium truncate">
-                {polishSettings.enabled && selectedPrompt
+                {selectedPrompt
                   ? selectedPrompt.name
-                  : <span className="text-muted-foreground">未启用</span>}
+                  : <span className="text-muted-foreground">未配置</span>}
               </div>
               <div className="text-xs text-muted-foreground mt-0.5">润色人设</div>
             </div>

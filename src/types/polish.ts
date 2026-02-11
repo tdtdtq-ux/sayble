@@ -24,7 +24,7 @@ export interface PolishSettings {
 export const builtinPrompts: PolishPrompt[] = [
   {
     id: "fix-only",
-    name: "仅修正错误",
+    name: "默认人设",
     content:
       "请只修正以下文字中的错别字和语法错误，不要改变原有的语气、用词风格和表达习惯。只输出修正后的文字，不要添加任何解释。",
   }

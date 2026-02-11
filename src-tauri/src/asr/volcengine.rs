@@ -2,8 +2,8 @@ use crate::asr::protocol::{
     build_audio_request, build_full_client_request, parse_server_response, AsrRequest,
 };
 use crate::config::{AsrConfig, ASR_RESOURCE_ID};
+use super::AsrEvent;
 use futures_util::{SinkExt, StreamExt};
-use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use tokio_tungstenite::{
@@ -12,21 +12,6 @@ use tokio_tungstenite::{
 };
 
 const ASR_WSS_URL: &str = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async";
-
-/// ASR 识别事件
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum AsrEvent {
-    /// 中间识别结果（边说边出字）
-    PartialResult(String),
-    /// 最终识别结果 (文本, 音频时长毫秒)
-    FinalResult(String, Option<i64>),
-    /// 错误
-    Error(String),
-    /// 连接已建立
-    Connected,
-    /// 连接已关闭
-    Disconnected,
-}
 
 /// 火山引擎 ASR 客户端
 pub struct VolcEngineAsr {
