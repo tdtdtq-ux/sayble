@@ -180,7 +180,7 @@ export function PersonaPage() {
                     size="sm"
                     onClick={() => setSelectedPromptId(activePrompt.id)}
                   >
-                    使用该人设
+                    使用
                   </Button>
                 )}
                 {!isBuiltin(activePrompt.id) &&

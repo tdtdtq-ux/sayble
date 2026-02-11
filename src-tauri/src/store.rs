@@ -131,6 +131,19 @@ impl AppStore {
         records
     }
 
+    /// 删除一条历史记录（按 timestamp 匹配）
+    pub fn remove_history(&self, timestamp: &str) {
+        let h = &self.history;
+        let mut records = h.get("records")
+            .and_then(|v| v.as_array().cloned())
+            .unwrap_or_default();
+        records.retain(|r| r.get("timestamp").and_then(|t| t.as_str()) != Some(timestamp));
+        h.set("records", Value::Array(records));
+        if let Err(e) = h.save() {
+            log::error!("[store] history remove save failed: {}", e);
+        }
+    }
+
     /// 清空历史记录
     pub fn clear_history(&self) {
         self.history.set("records", Value::Array(vec![]));

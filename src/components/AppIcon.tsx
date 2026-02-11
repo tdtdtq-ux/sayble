@@ -1,39 +1,40 @@
 export function AppIcon({ className }: { className?: string }) {
   return (
     <svg
-      viewBox="0 0 24 24"
+      viewBox="0 0 32 32"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
     >
       {/* 麦克风主体 */}
-      <rect x="9" y="2" width="6" height="11" rx="3" fill="currentColor" />
+      <rect x="10" y="4" width="7" height="12" rx="3.5" fill="currentColor" />
       {/* 麦克风支架弧线 */}
       <path
-        d="M5 11a7 7 0 0 0 14 0"
+        d="M7 14a6.5 6.5 0 0 0 13 0"
         stroke="currentColor"
-        strokeWidth="1.8"
+        strokeWidth="2"
         strokeLinecap="round"
         fill="none"
       />
       {/* 麦克风底座竖线 */}
-      <line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      {/* 声波 - 右侧 */}
+      <line x1="13.5" y1="20.5" x2="13.5" y2="27" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      {/* 声波 - 近 */}
       <path
-        d="M20 7.5a4.5 4.5 0 0 1 0 5"
+        d="M23 9a5 5 0 0 1 0 8"
         stroke="currentColor"
-        strokeWidth="1.5"
+        strokeWidth="1.8"
         strokeLinecap="round"
         fill="none"
-        opacity="0.6"
+        opacity="0.55"
       />
+      {/* 声波 - 远 */}
       <path
-        d="M22.5 5.5a8 8 0 0 1 0 9"
+        d="M26.5 6a9.5 9.5 0 0 1 0 14"
         stroke="currentColor"
-        strokeWidth="1.5"
+        strokeWidth="1.8"
         strokeLinecap="round"
         fill="none"
-        opacity="0.35"
+        opacity="0.3"
       />
     </svg>
   );

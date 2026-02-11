@@ -64,6 +64,34 @@
   }
 }
 
+/* 数字/英文展示字体 */
+@font-face {
+  font-family: "Inter";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("./assets/fonts/Inter-Bold.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Urbanist";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("./assets/fonts/Urbanist-Bold.woff2") format("woff2");
+}
+
+.font-display-num {
+  font-family: "Inter", system-ui, sans-serif;
+  font-feature-settings: "tnum";
+  letter-spacing: -0.02em;
+}
+
+.font-brand {
+  font-family: "Urbanist", system-ui, sans-serif;
+  letter-spacing: -0.03em;
+}
+
 /* 自定义悬浮滚动条 */
 .custom-scrollbar {
   scrollbar-width: thin;

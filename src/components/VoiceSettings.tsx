@@ -178,7 +178,7 @@ export function VoiceSettings() {
     <div className="flex flex-col h-full min-h-0">
       {/* 顶部标题栏 */}
       <div className="flex items-center justify-between px-6 py-3 shrink-0">
-        <h2 className="text-base font-semibold">ASR管理</h2>
+        <h2 className="text-base font-semibold">识别引擎</h2>
       </div>
 
       {/* 下方左右分栏 */}
@@ -228,7 +228,7 @@ export function VoiceSettings() {
                     size="sm"
                     onClick={() => handleSelect(activeMeta)}
                   >
-                    使用该服务
+                    使用
                   </Button>
                 )}
                 <Button

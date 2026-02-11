@@ -23,7 +23,7 @@ export function TitleBar() {
       className="shrink-0 h-8 flex select-none bg-background"
       data-tauri-drag-region
     >
-      <div className="w-56 shrink-0 border-r" data-tauri-drag-region />
+      <div className="w-56 shrink-0 bg-muted" data-tauri-drag-region />
       <div className="flex-1 flex items-center justify-end" data-tauri-drag-region>
         <button
           onClick={handleMinimize}

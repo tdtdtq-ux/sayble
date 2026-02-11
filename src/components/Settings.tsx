@@ -13,19 +13,25 @@ export interface SettingsHandle {
 interface SettingsProps {
   ref?: Ref<SettingsHandle>;
   onBack?: () => void;
+  initialTab?: string;
 }
 
 const menuItems = [
-  { key: "voice", label: "ASR管理", icon: Mic },
-  { key: "polish", label: "LLM管理", icon: Sparkles },
+  { key: "voice", label: "识别引擎", icon: Mic },
+  { key: "polish", label: "润色引擎", icon: Sparkles },
   { key: "general", label: "通用", icon: Settings2 },
   { key: "about", label: "关于", icon: Info },
 ] as const;
 
 type TabKey = (typeof menuItems)[number]["key"];
 
-export function Settings({ ref, onBack }: SettingsProps) {
-  const [activeTab, setActiveTab] = useState<TabKey>("voice");
+export function Settings({ ref, onBack, initialTab }: SettingsProps) {
+  const [activeTab, setActiveTab] = useState<TabKey>(() => {
+    if (initialTab && menuItems.some((m) => m.key === initialTab)) {
+      return initialTab as TabKey;
+    }
+    return "voice";
+  });
 
   useImperativeHandle(ref, () => ({
     showAbout: () => setActiveTab("about"),
@@ -34,11 +40,11 @@ export function Settings({ ref, onBack }: SettingsProps) {
   return (
     <div className="h-full flex">
       {/* 左侧菜单 */}
-      <div className="w-56 shrink-0 border-r flex flex-col">
+      <div className="w-56 shrink-0 bg-muted flex flex-col">
         <div className="px-4 pt-6 pb-4">
-          <h1 className="text-lg font-bold tracking-tight flex items-center gap-2">
-            <AppIcon className="size-5" />
-            Sayble
+          <h1 className="text-2xl font-bold flex items-center gap-3">
+            <AppIcon className="size-9" />
+            <span className="font-brand">Sayble</span>
           </h1>
         </div>
         <nav className="flex-1 px-3 flex flex-col gap-1">
@@ -48,8 +54,8 @@ export function Settings({ ref, onBack }: SettingsProps) {
               onClick={() => setActiveTab(key)}
               className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors text-left ${
                 activeTab === key
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                  ? "bg-background text-foreground"
+                  : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
               }`}
             >
               <Icon className="size-4 shrink-0" />
@@ -61,7 +67,7 @@ export function Settings({ ref, onBack }: SettingsProps) {
           <div className="px-4 pb-4">
             <button
               onClick={onBack}
-              className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+              className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground transition-colors"
             >
               <ArrowLeft className="size-4 shrink-0" />
               返回首页

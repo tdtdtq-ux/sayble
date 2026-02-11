@@ -11,6 +11,7 @@ import { useSettingsStore } from "@/stores/useSettingsStore";
 function App() {
   const settingsRef = useRef<SettingsHandle>(null);
   const [page, setPage] = useState<"home" | "settings">("home");
+  const [settingsTab, setSettingsTab] = useState<string | undefined>(undefined);
   const [pendingShowAbout, setPendingShowAbout] = useState(false);
 
   const autostartWarning = useSettingsStore((s) => s.autostartWarning);
@@ -112,11 +113,15 @@ function App() {
       )}
       <div className="flex-1 min-h-0">
         {page === "home" ? (
-          <Dashboard onOpenSettings={() => setPage("settings")} />
+          <Dashboard onOpenSettings={(tab?: string) => {
+            setSettingsTab(tab);
+            setPage("settings");
+          }} />
         ) : (
           <Settings
             ref={settingsRef}
-            onBack={() => setPage("home")}
+            onBack={() => { setSettingsTab(undefined); setPage("home"); }}
+            initialTab={settingsTab}
           />
         )}
       </div>

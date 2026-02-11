@@ -132,7 +132,7 @@ export function PolishProviderManager() {
     <div className="flex flex-col h-full min-h-0">
       {/* 顶部标题栏 */}
       <div className="flex items-center justify-between px-6 py-3 shrink-0">
-        <h2 className="text-base font-semibold">LLM管理</h2>
+        <h2 className="text-base font-semibold">润色引擎</h2>
         <Button variant="outline" size="sm" onClick={handleCreate}>
           <Plus className="size-4 mr-1" />
           新建
@@ -201,7 +201,7 @@ export function PolishProviderManager() {
                     size="sm"
                     onClick={() => setSelectedProviderId(activeProvider.id)}
                   >
-                    使用该供应商
+                    使用
                   </Button>
                 )}
                 <Button

@@ -709,6 +709,7 @@ pub fn run() {
             cmd_get_data_dir,
             cmd_load_history,
             cmd_clear_history,
+            cmd_remove_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -1161,5 +1162,12 @@ fn cmd_load_history(app: tauri::AppHandle) -> Result<Vec<serde_json::Value>, Str
 fn cmd_clear_history(app: tauri::AppHandle) -> Result<(), String> {
     let store = app.state::<AppStore>();
     store.clear_history();
+    Ok(())
+}
+
+#[tauri::command]
+fn cmd_remove_history(app: tauri::AppHandle, timestamp: String) -> Result<(), String> {
+    let store = app.state::<AppStore>();
+    store.remove_history(&timestamp);
     Ok(())
 }

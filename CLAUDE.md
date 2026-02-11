@@ -40,8 +40,8 @@ React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui (new-york 风格)。
 - **main.tsx** → 入口，根据 URL 参数渲染 `<App />` 或 `<FloatingApp />`
 - **App.tsx** → 主窗口根组件，页面路由（Dashboard / Settings）、自启动检测、警告条展示。挂载时调用 `useSettingsStore.getState().loadSettings()` 加载全局设置
 - **Dashboard.tsx** — 首页框架（左侧菜单 + 首页/人设切换）
-- **Settings.tsx** — 设置页框架（左侧菜单 + tab 路由），菜单项：ASR管理 / LLM管理 / 通用 / 关于
-- **VoiceSettings.tsx** — ASR管理（内建供应商列表、左右分栏内联编辑、连接测试）
+- **Settings.tsx** — 设置页框架（左侧菜单 + tab 路由），菜单项：识别引擎 / 润色引擎 / 通用 / 关于
+- **VoiceSettings.tsx** — 识别引擎（内建供应商列表、左右分栏内联编辑、连接测试）
 - **GeneralSettings.tsx** — 通用设置 tab 框架（Tabs 路由：首页 / 快捷键 / 数据）
 - **general/GeneralHome.tsx** — 通用首页 tab（输出方式、麦克风、自动输出、自启动）
 - **general/HotkeySettings.tsx** — 快捷键 tab（切换模式、长按模式）
