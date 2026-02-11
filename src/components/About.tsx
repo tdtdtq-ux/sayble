@@ -45,12 +45,12 @@ export function About() {
         {deviceId && (
           <span
             className="inline-block rounded-full border px-3 py-0.5 text-xs text-muted-foreground cursor-pointer hover:border-primary/50 transition-colors"
-            title="点击复制完整 Device ID"
+            title="点击复制完整 UID"
             onClick={() => {
-              navigator.clipboard.writeText(deviceId).then(() => toast.success("Device ID 已复制"));
+              navigator.clipboard.writeText(deviceId).then(() => toast.success("UID 已复制"));
             }}
           >
-            ID: {deviceId.slice(0, 8)}...
+            UID: {deviceId.slice(0, 8)}...
           </span>
         )}
       </div>
