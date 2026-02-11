@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from "react";
 import { X } from "lucide-react";
+import { suspendKeyEventBridge, resumeKeyEventBridge } from "@/lib/keyEventBridge";
 
 interface HotkeyRecorderProps {
   value: string;
@@ -50,6 +51,7 @@ export function HotkeyRecorder({ value, onChange }: HotkeyRecorderProps) {
     if (recording) return;
     setRecording(true);
     setPressedKeys([]);
+    suspendKeyEventBridge();
 
     const keys = new Set<string>();
 
@@ -86,6 +88,7 @@ export function HotkeyRecorder({ value, onChange }: HotkeyRecorderProps) {
 
     const cleanup = () => {
       setRecording(false);
+      resumeKeyEventBridge();
       document.removeEventListener("keydown", handleKeyDown, true);
       document.removeEventListener("keyup", handleKeyUp, true);
       document.removeEventListener("mousedown", handleClickOutside, true);

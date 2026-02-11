@@ -7,6 +7,7 @@ import { Settings, type SettingsHandle } from "@/components/Settings";
 import { TitleBar } from "@/components/TitleBar";
 import { Toaster } from "@/components/ui/sonner";
 import { useSettingsStore } from "@/stores/useSettingsStore";
+import { setupKeyEventBridge } from "@/lib/keyEventBridge";
 
 function App() {
   const settingsRef = useRef<SettingsHandle>(null);
@@ -23,6 +24,11 @@ function App() {
   useEffect(() => {
     useSettingsStore.getState().loadSettings();
     useSettingsStore.getState().checkUpdate();
+  }, []);
+
+  // WebView2 焦点时键盘钩子失效补偿：通过 JS 层监听按键并注入后端
+  useEffect(() => {
+    return setupKeyEventBridge();
   }, []);
 
   // 监听托盘"关于"事件

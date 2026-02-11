@@ -702,6 +702,7 @@ pub fn run() {
             cmd_clear_history,
             cmd_remove_history,
             cmd_check_update,
+            cmd_inject_key_event,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -1221,4 +1222,16 @@ async fn cmd_check_update() -> Result<Option<String>, String> {
         log::info!("[cmd] check_update: already up to date");
         Ok(None)
     }
+}
+
+/// 从前端 JS 层注入按键事件，补偿 WebView2 焦点时键盘钩子失效的问题
+#[tauri::command]
+fn cmd_inject_key_event(
+    hotkey_mgr: tauri::State<'_, Arc<Mutex<HotkeyManager>>>,
+    vk_code: u32,
+    is_down: bool,
+) -> Result<(), String> {
+    let mgr = hotkey_mgr.lock().map_err(|e| e.to_string())?;
+    mgr.inject_key_event(vk_code, is_down);
+    Ok(())
 }

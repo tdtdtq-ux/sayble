@@ -160,6 +160,9 @@ pub struct HotkeyManager {
     running: Arc<Mutex<bool>>,
     #[cfg(windows)]
     hook_thread_id: Arc<Mutex<Option<u32>>>,
+    /// 注入通道：前端 JS 层通过此通道补偿 WebView2 焦点时钩子收不到的按键事件
+    #[cfg(windows)]
+    inject_tx: Arc<Mutex<Option<mpsc::Sender<RawKeyEvent>>>>,
 }
 
 #[cfg(windows)]
@@ -185,6 +188,8 @@ impl HotkeyManager {
             running: Arc::new(Mutex::new(false)),
             #[cfg(windows)]
             hook_thread_id: Arc::new(Mutex::new(None)),
+            #[cfg(windows)]
+            inject_tx: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -206,11 +211,17 @@ impl HotkeyManager {
         let configs = self.configs.clone();
         let running = self.running.clone();
         let hook_thread_id = self.hook_thread_id.clone();
+        let inject_tx = self.inject_tx.clone();
 
         *running.lock().map_err(|e| e.to_string())? = true;
 
         thread::spawn(move || {
             let (raw_tx, raw_rx) = mpsc::channel::<RawKeyEvent>();
+
+            // 将 raw_tx 的克隆存入 inject_tx，供前端 JS 层注入按键事件
+            if let Ok(mut tx) = inject_tx.lock() {
+                *tx = Some(raw_tx.clone());
+            }
 
             let hook_thread_id_inner = hook_thread_id.clone();
 
@@ -345,6 +356,21 @@ impl HotkeyManager {
     #[cfg(not(windows))]
     pub fn start(&mut self) -> Result<(), String> {
         Err("Hotkey manager is only supported on Windows".to_string())
+    }
+
+    /// 从外部注入按键事件（用于 WebView2 焦点时 JS 层补偿）
+    #[cfg(windows)]
+    pub fn inject_key_event(&self, vk: u32, is_down: bool) {
+        if let Ok(tx) = self.inject_tx.lock() {
+            if let Some(tx) = tx.as_ref() {
+                let event = if is_down {
+                    RawKeyEvent::KeyDown(vk)
+                } else {
+                    RawKeyEvent::KeyUp(vk)
+                };
+                let _ = tx.send(event);
+            }
+        }
     }
 
     pub fn stop(&self) {
