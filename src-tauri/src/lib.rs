@@ -459,7 +459,11 @@ fn get_polish_config(app: &tauri::AppHandle) -> Option<polish::PolishConfig> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 在所有插件之前初始化 AppStore，确保 state() 始终可用
+    let app_store = AppStore::init();
+
     tauri::Builder::default()
+        .manage(app_store)
         .plugin(
             tauri_plugin_log::Builder::new()
                 .targets([
@@ -493,11 +497,8 @@ pub fn run() {
         ))
         .setup(|app| {
             let handle = app.handle().clone();
-            TrayManager::setup(&handle)?;
 
-            // 初始化 AppStore 并注册为 managed state
-            let app_store = AppStore::init();
-            app.manage(app_store);
+            TrayManager::setup(&handle)?;
 
             // 确保 deviceId 存在：首次启动时从 MachineGuid 生成
             {

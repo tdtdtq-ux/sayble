@@ -26,6 +26,7 @@ interface SettingsStore {
 
   // 更新检查
   updateAvailable: { version: string; url: string } | null;
+  _updateChecked: boolean;
   checkUpdate: () => Promise<void>;
 
   // ---- 动作 ----

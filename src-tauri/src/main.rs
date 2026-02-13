@@ -7,7 +7,9 @@ fn main() {
     std::panic::set_hook(Box::new(move |info| {
         let _ = std::fs::create_dir_all(crash_log.parent().unwrap());
         let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
-        let msg = format!("[{}] PANIC: {}\n", timestamp, info);
+        let version = env!("CARGO_PKG_VERSION");
+        let build_time = env!("BUILD_TIME");
+        let msg = format!("[{}] PANIC (v{}, built {}): {}\n", timestamp, version, build_time, info);
         let _ = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
