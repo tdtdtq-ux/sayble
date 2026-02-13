@@ -131,6 +131,7 @@ Vitest + jsdom 环境 + @testing-library/react。测试文件放在对应目录�
 | `~/.sayble/stats.json` | 使用统计持久化（自封装 JsonStore） |
 | `~/.sayble/history.json` | 识别历史记录持久化（自封装 JsonStore，最多 200 条） |
 | `~/.sayble/logs/sayble.log` | 应用日志（tauri-plugin-log，5MB 轮转） |
+| `~/.sayble/logs/crash.log` | 崩溃日志（panic hook 写入，含版本号和编译时间） |
 
 ### 日志 Tag 约定
 
