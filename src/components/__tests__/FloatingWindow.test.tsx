@@ -63,7 +63,7 @@ describe("FloatingWindow", () => {
         duration={0}
       />
     );
-    expect(screen.getByText("识别完成")).toBeInTheDocument();
+    expect(screen.getByText("完成")).toBeInTheDocument();
     expect(screen.getByText("识别完成的文字")).toBeInTheDocument();
   });
 
@@ -76,7 +76,7 @@ describe("FloatingWindow", () => {
         duration={0}
       />
     );
-    expect(screen.getByText("Esc 取消")).toBeInTheDocument();
+    expect(screen.getByText("Esc")).toBeInTheDocument();
   });
 
   it("should show cancel button during recognizing", () => {
@@ -88,7 +88,7 @@ describe("FloatingWindow", () => {
         duration={0}
       />
     );
-    expect(screen.getByText("Esc 取消")).toBeInTheDocument();
+    expect(screen.getByText("Esc")).toBeInTheDocument();
   });
 
   it("should format duration correctly", () => {

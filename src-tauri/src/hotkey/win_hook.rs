@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
 #[cfg(windows)]
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    VK_LCONTROL, VK_LMENU, VK_LSHIFT, VK_RCONTROL, VK_RMENU, VK_RSHIFT,
+    GetAsyncKeyState, VK_LCONTROL, VK_LMENU, VK_LSHIFT, VK_RCONTROL, VK_RMENU, VK_RSHIFT,
 };
 #[cfg(windows)]
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -59,11 +59,18 @@ fn is_known_key(vk: u32) -> bool {
     )
 }
 
+#[cfg(windows)]
+fn is_physical_key_down(vk: u32) -> bool {
+    (unsafe { GetAsyncKeyState(vk as i32) } as u16 & 0x8000) != 0
+}
+
 /// 按键状态追踪
 #[derive(Debug)]
 struct KeyState {
     pressed_modifiers: HashSet<u32>,
     pressed_keys: HashSet<u32>,
+    /// 修饰键按下时间戳，用于 KeyUp 丢失时恢复热键状态
+    modifier_press_times: HashMap<u32, Instant>,
     /// 普通键按下时间戳，用于超时清理
     key_press_times: HashMap<u32, Instant>,
 }
@@ -73,6 +80,7 @@ impl Default for KeyState {
         Self {
             pressed_modifiers: HashSet::new(),
             pressed_keys: HashSet::new(),
+            modifier_press_times: HashMap::new(),
             key_press_times: HashMap::new(),
         }
     }
@@ -108,9 +116,40 @@ impl KeyState {
         Self::modifier_from_vk(vk).is_some()
     }
 
-    /// 清除超时的普通键（KeyUp 丢失保护）
+    /// 清除超时按键（KeyUp 丢失保护）
     fn expire_stale_keys(&mut self) {
         let now = Instant::now();
+        let expired_modifiers: Vec<u32> = self
+            .modifier_press_times
+            .iter()
+            .filter(|(&vk, t)| {
+                now.duration_since(**t).as_secs() >= KEY_EXPIRE_SECS && !is_physical_key_down(vk)
+            })
+            .map(|(&vk, _)| vk)
+            .collect();
+        let refreshed_modifiers: Vec<u32> = self
+            .modifier_press_times
+            .iter()
+            .filter(|(&vk, t)| {
+                now.duration_since(**t).as_secs() >= KEY_EXPIRE_SECS && is_physical_key_down(vk)
+            })
+            .map(|(&vk, _)| vk)
+            .collect();
+        for vk in &refreshed_modifiers {
+            self.modifier_press_times.insert(*vk, now);
+        }
+        for vk in &expired_modifiers {
+            self.pressed_modifiers.remove(vk);
+            self.modifier_press_times.remove(vk);
+        }
+        if !expired_modifiers.is_empty() {
+            log::debug!(
+                "[hotkey] expired stale modifiers: {:?}, remaining pressed_modifiers={:?}",
+                expired_modifiers,
+                self.pressed_modifiers
+            );
+        }
+
         let expired: Vec<u32> = self
             .key_press_times
             .iter()
@@ -291,7 +330,11 @@ impl HotkeyManager {
 
                                 // 去重：忽略 Windows 按键重复（键已在 pressed 集合中）
                                 let is_repeat = if KeyState::is_modifier(vk) {
-                                    !key_state.pressed_modifiers.insert(vk)
+                                    let inserted = key_state.pressed_modifiers.insert(vk);
+                                    if inserted {
+                                        key_state.modifier_press_times.insert(vk, Instant::now());
+                                    }
+                                    !inserted
                                 } else {
                                     let inserted = key_state.pressed_keys.insert(vk);
                                     if inserted {
@@ -324,6 +367,7 @@ impl HotkeyManager {
                             RawKeyEvent::KeyUp(vk) => {
                                 if KeyState::is_modifier(vk) {
                                     key_state.pressed_modifiers.remove(&vk);
+                                    key_state.modifier_press_times.remove(&vk);
                                 } else {
                                     key_state.pressed_keys.remove(&vk);
                                     key_state.key_press_times.remove(&vk);
@@ -410,6 +454,11 @@ unsafe extern "system" fn keyboard_hook_proc(
         let kb_struct = unsafe { &*(lparam.0 as *const KBDLLHOOKSTRUCT) };
         let vk = kb_struct.vkCode;
 
+        // 忽略程序自己模拟出来的按键（例如输出时的 Ctrl+V），避免 Ctrl-only 快捷键被误触发。
+        if (kb_struct.flags.0 & 0x10) != 0 {
+            return unsafe { CallNextHookEx(None, code, wparam, lparam) };
+        }
+
         // 通过 AtomicPtr 安全读取全局钩子数据（无数据竞争）
         let ptr = GLOBAL_HOOK_DATA.load(Ordering::SeqCst);
         if !ptr.is_null() {
@@ -488,6 +537,22 @@ mod tests {
         let state = KeyState::default();
         assert!(state.pressed_modifiers.is_empty());
         assert!(state.pressed_keys.is_empty());
+        assert!(state.modifier_press_times.is_empty());
+    }
+
+    #[test]
+    fn test_expire_stale_modifier() {
+        let mut state = KeyState::default();
+        let ctrl = VK_LCONTROL.0 as u32;
+        state.pressed_modifiers.insert(ctrl);
+        state
+            .modifier_press_times
+            .insert(ctrl, Instant::now() - std::time::Duration::from_secs(KEY_EXPIRE_SECS + 1));
+
+        state.expire_stale_keys();
+
+        assert!(state.pressed_modifiers.is_empty());
+        assert!(state.modifier_press_times.is_empty());
     }
 
     #[test]

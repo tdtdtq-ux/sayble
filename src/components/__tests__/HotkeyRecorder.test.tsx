@@ -10,17 +10,17 @@ describe("HotkeyRecorder", () => {
 
   it("should show placeholder when no value", () => {
     render(<HotkeyRecorder value="" onChange={() => {}} />);
-    expect(screen.getByText("未设置")).toBeInTheDocument();
+    expect(screen.getByText("点击设置快捷键")).toBeInTheDocument();
   });
 
-  it("should have record button", () => {
+  it("should have recorder trigger", () => {
     render(<HotkeyRecorder value="" onChange={() => {}} />);
-    expect(screen.getByText("录入")).toBeInTheDocument();
+    expect(screen.getByText("点击设置快捷键")).toBeInTheDocument();
   });
 
   it("should show clear button when value exists", () => {
     render(<HotkeyRecorder value="左Ctrl + Space" onChange={() => {}} />);
-    expect(screen.getByText("清除")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "清除快捷键" })).toBeInTheDocument();
   });
 
   it("should not show clear button when no value", () => {
@@ -31,14 +31,13 @@ describe("HotkeyRecorder", () => {
   it("should call onChange with empty string on clear", () => {
     const onChange = vi.fn();
     render(<HotkeyRecorder value="右Ctrl" onChange={onChange} />);
-    fireEvent.click(screen.getByText("清除"));
+    fireEvent.click(screen.getByRole("button", { name: "清除快捷键" }));
     expect(onChange).toHaveBeenCalledWith("");
   });
 
   it("should enter recording mode on click", () => {
     render(<HotkeyRecorder value="" onChange={() => {}} />);
-    fireEvent.click(screen.getByText("录入"));
-    expect(screen.getByText("请按下快捷键组合...")).toBeInTheDocument();
-    expect(screen.getByText("录入中...")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("点击设置快捷键"));
+    expect(screen.getByText("按下快捷键...")).toBeInTheDocument();
   });
 });

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { info, debug, error as logError } from "@tauri-apps/plugin-log";
@@ -172,11 +173,18 @@ export function FloatingApp() {
 
     listen<{
       action: string;
+      sessionId?: number | null;
     }>("floating-control", (event) => {
       if (cancelled) return;
-      const { action } = event.payload;
+      const { action, sessionId } = event.payload;
       info("[floating-control] received action: " + action);
       if (action === "start") {
+        if (typeof sessionId === "number") {
+          maxSessionRef.current = Math.max(maxSessionRef.current, sessionId);
+          if (cancelledSessionRef.current === sessionId) {
+            cancelledSessionRef.current = 0;
+          }
+        }
         resetState();
         setFloatingStatus("recording");
         startTimer();
@@ -186,7 +194,7 @@ export function FloatingApp() {
         clearTimer();
       } else if (action === "cancel") {
         // 标记当前 session 为已取消，其后续事件会被丢弃
-        cancelledSessionRef.current = maxSessionRef.current;
+        cancelledSessionRef.current = typeof sessionId === "number" ? sessionId : maxSessionRef.current;
         setFloatingStatus("idle");
         clearTimer();
         hideWindow();
@@ -212,8 +220,14 @@ export function FloatingApp() {
       finalText={finalText}
       duration={duration}
       errorMessage={errorMessage}
-      onCancel={() => {
-        cancelledSessionRef.current = maxSessionRef.current;
+      onCancel={async () => {
+        try {
+          const sessionId = await invoke<number | null>("cmd_cancel_recording");
+          cancelledSessionRef.current = typeof sessionId === "number" ? sessionId : maxSessionRef.current;
+        } catch (e) {
+          logError("[floating-control] cancel_recording failed: " + String(e));
+          cancelledSessionRef.current = maxSessionRef.current;
+        }
         setFloatingStatus("idle");
         clearTimer();
         hideWindow();

@@ -28,6 +28,8 @@
         "visible": false,
         "decorations": false,
         "transparent": false,
+        "focus": false,
+        "focusable": false,
         "alwaysOnTop": true,
         "resizable": false,
         "skipTaskbar": true,

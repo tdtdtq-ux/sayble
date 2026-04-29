@@ -356,7 +356,17 @@ fn load_hotkey_configs_from_store(app: &tauri::AppHandle) -> Option<Vec<HotkeyCo
 
 /// 润色+输出+延迟的统一流程，供 FinalResult 和 Disconnected fallback 共用
 /// 返回值：是否润色失败（决定 Finished 前的延迟时长）
-async fn polish_and_output(app: &tauri::AppHandle, session_id: u64, text: &str) -> bool {
+async fn polish_and_output(
+    app: &tauri::AppHandle,
+    session_id: u64,
+    text: &str,
+    cancelled: &Arc<AtomicBool>,
+) -> bool {
+    if cancelled.load(Ordering::SeqCst) {
+        log::info!("[asr-forward] session {} cancelled before output pipeline", session_id);
+        return false;
+    }
+
     let (final_text, polished_text, polish_failed) = match get_polish_config(app) {
         Some(config) => {
             // 润色开启：跳过 FinalResult，直接 emit Polishing 携带原文
@@ -366,6 +376,10 @@ async fn polish_and_output(app: &tauri::AppHandle, session_id: u64, text: &str) 
             }));
             match polish::polish_text(&config, text).await {
                 Ok(polished) => {
+                    if cancelled.load(Ordering::SeqCst) {
+                        log::info!("[asr-forward] session {} cancelled after polish, skipping output", session_id);
+                        return false;
+                    }
                     let _ = app.emit("asr-event", serde_json::json!({
                         "sessionId": session_id,
                         "event": {"PolishResult": &polished}
@@ -373,6 +387,10 @@ async fn polish_and_output(app: &tauri::AppHandle, session_id: u64, text: &str) 
                     (polished.clone(), Some(polished), false)
                 }
                 Err(e) => {
+                    if cancelled.load(Ordering::SeqCst) {
+                        log::info!("[asr-forward] session {} cancelled while polish failed, skipping output", session_id);
+                        return false;
+                    }
                     log::error!("[asr-forward] polish failed: {}", e);
                     let _ = app.emit("asr-event", serde_json::json!({
                         "sessionId": session_id,
@@ -391,6 +409,12 @@ async fn polish_and_output(app: &tauri::AppHandle, session_id: u64, text: &str) 
             (text.to_string(), None, false)
         }
     };
+
+    if cancelled.load(Ordering::SeqCst) {
+        log::info!("[asr-forward] session {} cancelled before final output", session_id);
+        return polish_failed;
+    }
+
     output_text_from_store(app, &final_text);
 
     // 写入历史记录
@@ -617,15 +641,14 @@ pub fn run() {
                                 log::info!("[hotkey-forward] StartRecording: reading settings from store");
                                 match load_recording_settings_from_store(&hotkey_handle) {
                                     Ok(recording_config) => {
-                                        // 先通知浮窗开始（让浮窗立即显示）
-                                        let _ = hotkey_handle.emit("floating-control", serde_json::json!({
-                                            "action": "start",
-                                        }));
-
                                         // 直接调用录音启动
                                         match start_recording_inner(&hotkey_handle, &hotkey_flag, recording_config) {
                                             Ok(session_id) => {
                                                 recording_start_time = Some(std::time::Instant::now());
+                                                let _ = hotkey_handle.emit("floating-control", serde_json::json!({
+                                                    "action": "start",
+                                                    "sessionId": session_id,
+                                                }));
                                                 log::info!("[hotkey-forward] recording started, session_id={}", session_id);
                                             }
                                             Err(e) => {
@@ -654,9 +677,10 @@ pub fn run() {
                                 }
 
                                 match stop_recording_inner(&hotkey_flag) {
-                                    Ok(()) => {
+                                    Ok(session_id) => {
                                         let _ = hotkey_handle.emit("floating-control", serde_json::json!({
                                             "action": "stop",
+                                            "sessionId": session_id,
                                         }));
                                         log::info!("[hotkey-forward] recording stopped");
                                     }
@@ -668,13 +692,10 @@ pub fn run() {
 
                             HotkeyEvent::CancelRecording => {
                                 recording_start_time = None;
-                                // 先设置 cancelled 标志，让 ASR 转发 task 跳过输出
-                                if let Ok(f) = hotkey_flag.lock() {
-                                    f.cancelled.store(true, Ordering::SeqCst);
-                                }
-                                let _ = stop_recording_inner(&hotkey_flag);
+                                let session_id = cancel_recording_inner(&hotkey_flag).ok().flatten();
                                 let _ = hotkey_handle.emit("floating-control", serde_json::json!({
                                     "action": "cancel",
+                                    "sessionId": session_id,
                                 }));
                                 log::info!("[hotkey-forward] recording cancelled");
                             }
@@ -709,6 +730,7 @@ pub fn run() {
             cmd_test_polish_provider,
             cmd_start_recording,
             cmd_stop_recording,
+            cmd_cancel_recording,
             cmd_load_stats,
             cmd_restore_autostart,
             cmd_check_autostart,
@@ -919,6 +941,7 @@ fn start_recording_inner(
         log::debug!("[recording] current flag: is_recording={}, session_id={}", f.is_recording, f.session_id);
         if f.is_recording {
             log::warn!("[recording] force stopping previous session {}", f.session_id);
+            f.cancelled.store(true, Ordering::SeqCst);
             if let Some(tx) = f.stop_tx.take() {
                 let _ = tx.send(());
             }
@@ -930,6 +953,9 @@ fn start_recording_inner(
     let (session_id, cancelled) = {
         let mut f = flag.lock().map_err(|e| e.to_string())?;
         let new_id = f.session_id.wrapping_add(1);
+        // 新 session 开始时，旧 session 的 ASR / 润色 task 可能还在收尾。
+        // 先取消旧标志，避免迟到结果写入当前焦点。
+        f.cancelled.store(true, Ordering::SeqCst);
         f.session_id = new_id;
         f.cancelled = Arc::new(AtomicBool::new(false));
         log::debug!("[recording] allocated session_id={}", new_id);
@@ -988,15 +1014,29 @@ fn start_recording_inner(
                     }
                 };
 
-                // 转发音频数据到 ASR
-                loop {
+                // 转发音频数据到 ASR。不要在队列满时无限 blocking_send；
+                // ASR 连接卡住时仍要能响应 stop/cancel。
+                'forward_audio: loop {
                     if stop_rx.try_recv().is_ok() {
                         break;
                     }
                     match capture_rx.recv_timeout(std::time::Duration::from_millis(100)) {
                         Ok(samples) => {
-                            if audio_tx.blocking_send(samples).is_err() {
-                                break;
+                            let mut pending = Some(samples);
+                            while let Some(samples) = pending.take() {
+                                if stop_rx.try_recv().is_ok() {
+                                    break 'forward_audio;
+                                }
+                                match audio_tx.try_send(samples) {
+                                    Ok(()) => {}
+                                    Err(tokio::sync::mpsc::error::TrySendError::Full(samples)) => {
+                                        pending = Some(samples);
+                                        std::thread::sleep(std::time::Duration::from_millis(20));
+                                    }
+                                    Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                                        break 'forward_audio;
+                                    }
+                                }
                             }
                         }
                         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
@@ -1068,12 +1108,17 @@ fn start_recording_inner(
                     log::debug!("[asr-forward] session {} received: {:?}", session_id, event);
                     match &event {
                         AsrEvent::Connected => {
-                            let _ = app_clone.emit("asr-event", serde_json::json!({
-                                "sessionId": session_id,
-                                "event": serde_json::to_value(&event).unwrap_or_default()
-                            }));
+                            if !cancelled.load(Ordering::SeqCst) {
+                                let _ = app_clone.emit("asr-event", serde_json::json!({
+                                    "sessionId": session_id,
+                                    "event": serde_json::to_value(&event).unwrap_or_default()
+                                }));
+                            }
                         }
                         AsrEvent::PartialResult(text) => {
+                            if cancelled.load(Ordering::SeqCst) {
+                                continue;
+                            }
                             if is_streaming_engine {
                                 // 流式引擎：浮窗显示 已累积文本 + 当前 partial
                                 let display = if accumulated_text.is_empty() {
@@ -1113,7 +1158,7 @@ fn start_recording_inner(
                                     log::info!("[asr-forward] session {} cancelled, skipping output", session_id);
                                 } else {
                                     app_clone.state::<AppStore>().accumulate_stats(text.chars().count(), *duration_ms);
-                                    polish_and_output(&app_clone, session_id, text).await;
+                                    polish_and_output(&app_clone, session_id, text, &cancelled).await;
                                 }
                                 let _ = app_clone.emit("asr-event", serde_json::json!({
                                     "sessionId": session_id,
@@ -1124,11 +1169,13 @@ fn start_recording_inner(
                             }
                         }
                         AsrEvent::Error(_) => {
-                            let _ = app_clone.emit("asr-event", serde_json::json!({
-                                "sessionId": session_id,
-                                "event": serde_json::to_value(&event).unwrap_or_default()
-                            }));
-                            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                            if !cancelled.load(Ordering::SeqCst) {
+                                let _ = app_clone.emit("asr-event", serde_json::json!({
+                                    "sessionId": session_id,
+                                    "event": serde_json::to_value(&event).unwrap_or_default()
+                                }));
+                                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                            }
                             let _ = app_clone.emit("asr-event", serde_json::json!({
                                 "sessionId": session_id,
                                 "event": "Finished"
@@ -1144,11 +1191,11 @@ fn start_recording_inner(
                                 // 流式引擎：Disconnected 时统一输出累积文本
                                 log::info!("[asr-forward] session {} streaming disconnect, outputting accumulated text len={}", session_id, accumulated_text.len());
                                 app_clone.state::<AppStore>().accumulate_stats(accumulated_text.chars().count(), None);
-                                polish_and_output(&app_clone, session_id, &accumulated_text).await;
+                                polish_and_output(&app_clone, session_id, &accumulated_text, &cancelled).await;
                             } else if !had_final {
                                 if !last_partial_text.is_empty() {
                                     app_clone.state::<AppStore>().accumulate_stats(last_partial_text.chars().count(), None);
-                                    polish_and_output(&app_clone, session_id, &last_partial_text).await;
+                                    polish_and_output(&app_clone, session_id, &last_partial_text, &cancelled).await;
                                 }
                             } else {
                                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -1177,7 +1224,7 @@ fn start_recording_inner(
             if is_streaming_engine && !accumulated_text.is_empty() && !cancelled.load(Ordering::SeqCst) {
                 log::info!("[asr-forward] session {} channel ended, outputting accumulated text len={}", session_id, accumulated_text.len());
                 app_clone.state::<AppStore>().accumulate_stats(accumulated_text.chars().count(), None);
-                polish_and_output(&app_clone, session_id, &accumulated_text).await;
+                polish_and_output(&app_clone, session_id, &accumulated_text, &cancelled).await;
             }
             log::warn!("[asr-forward] session {} channel ended without terminal event, sending Finished", session_id);
             let _ = app_clone.emit("asr-event", serde_json::json!({
@@ -1210,18 +1257,36 @@ async fn cmd_start_recording(
 }
 
 /// 内部录音停止逻辑，可从任意线程调用
-fn stop_recording_inner(flag: &Arc<Mutex<RecordingFlag>>) -> Result<(), String> {
+fn stop_recording_inner(flag: &Arc<Mutex<RecordingFlag>>) -> Result<u64, String> {
     let mut f = flag.lock().map_err(|e| e.to_string())?;
     log::info!("[recording] stop_recording_inner, is_recording={}, session_id={}", f.is_recording, f.session_id);
     if !f.is_recording {
         return Err("当前没有在录音".to_string());
     }
+    let session_id = f.session_id;
     if let Some(tx) = f.stop_tx.take() {
         let _ = tx.send(());
     }
     f.is_recording = false;
     log::debug!("[recording] session {} stopped, is_recording=false", f.session_id);
-    Ok(())
+    Ok(session_id)
+}
+
+/// 内部录音取消逻辑：无论当前处于录音、识别还是润色阶段，都标记当前 session 不允许输出。
+fn cancel_recording_inner(flag: &Arc<Mutex<RecordingFlag>>) -> Result<Option<u64>, String> {
+    let mut f = flag.lock().map_err(|e| e.to_string())?;
+    let session_id = if f.session_id == 0 { None } else { Some(f.session_id) };
+    log::info!(
+        "[recording] cancel_recording_inner, is_recording={}, session_id={:?}",
+        f.is_recording,
+        session_id
+    );
+    f.cancelled.store(true, Ordering::SeqCst);
+    if let Some(tx) = f.stop_tx.take() {
+        let _ = tx.send(());
+    }
+    f.is_recording = false;
+    Ok(session_id)
 }
 
 #[tauri::command]
@@ -1229,7 +1294,15 @@ fn cmd_stop_recording(
     flag: tauri::State<'_, Arc<Mutex<RecordingFlag>>>,
 ) -> Result<(), String> {
     log::info!("[cmd] stop_recording called");
-    stop_recording_inner(&flag)
+    stop_recording_inner(&flag).map(|_| ())
+}
+
+#[tauri::command]
+fn cmd_cancel_recording(
+    flag: tauri::State<'_, Arc<Mutex<RecordingFlag>>>,
+) -> Result<Option<u64>, String> {
+    log::info!("[cmd] cancel_recording called");
+    cancel_recording_inner(&flag)
 }
 
 #[tauri::command]

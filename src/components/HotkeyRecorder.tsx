@@ -125,6 +125,7 @@ export function HotkeyRecorder({ value, onChange }: HotkeyRecorderProps) {
       {value && !recording && (
         <button
           type="button"
+          aria-label="清除快捷键"
           className="ml-2 text-muted-foreground hover:text-foreground transition-colors"
           onClick={(e) => {
             e.stopPropagation();

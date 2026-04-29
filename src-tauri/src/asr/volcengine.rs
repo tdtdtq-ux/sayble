@@ -202,9 +202,13 @@ pub async fn run_asr_session(
     let connect_id = uuid::Uuid::new_v4().to_string();
     let request = build_ws_request(&config, &connect_id)?;
 
-    let (ws_stream, _) = connect_async(request)
-        .await
-        .map_err(|e| format!("WebSocket connect error: {}", e))?;
+    let (ws_stream, _) = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        connect_async(request),
+    )
+    .await
+    .map_err(|_| "WebSocket connect timeout (10s)".to_string())?
+    .map_err(|e| format!("WebSocket connect error: {}", e))?;
 
     let _ = event_tx.send(AsrEvent::Connected);
     log::info!("[asr] WebSocket connected, connect_id={}", connect_id);
@@ -214,17 +218,20 @@ pub async fn run_asr_session(
     // 发送 full client request
     let asr_request = AsrRequest::new(config.auto_punctuation);
     let full_request = build_full_client_request(&asr_request)?;
-    write
-        .send(Message::Binary(full_request.into()))
-        .await
-        .map_err(|e| format!("Send full request error: {}", e))?;
+    tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        write.send(Message::Binary(full_request.into())),
+    )
+    .await
+    .map_err(|_| "Send full request timeout (5s)".to_string())?
+    .map_err(|e| format!("Send full request error: {}", e))?;
 
     log::info!("[asr] full client request sent");
 
     // 启动接收任务
     let event_tx_recv = event_tx.clone();
     let is_running_recv = is_running.clone();
-    let recv_task = tokio::spawn(async move {
+    let mut recv_task = tokio::spawn(async move {
         while *is_running_recv.lock().unwrap_or_else(|e| e.into_inner()) {
             match read.next().await {
                 Some(Ok(Message::Binary(data))) => {
@@ -288,6 +295,7 @@ pub async fn run_asr_session(
     });
 
     // 发送音频数据
+    let mut sent_last_frame = false;
     while *is_running.lock().unwrap_or_else(|e| e.into_inner()) {
         match audio_rx.recv().await {
             Some(samples) => {
@@ -298,23 +306,70 @@ pub async fn run_asr_session(
                     .collect();
 
                 let frame = build_audio_request(&bytes, false)?;
-                if let Err(e) = write.send(Message::Binary(frame.into())).await {
-                    log::error!("[asr] send audio error: {}", e);
-                    break;
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(5),
+                    write.send(Message::Binary(frame.into())),
+                )
+                .await
+                {
+                    Ok(Ok(())) => {}
+                    Ok(Err(e)) => {
+                        log::error!("[asr] send audio error: {}", e);
+                        break;
+                    }
+                    Err(_) => {
+                        log::error!("[asr] send audio timeout");
+                        break;
+                    }
                 }
             }
             None => {
                 // audio channel closed, send last frame
                 let frame = build_audio_request(&[], true)?;
-                let _ = write.send(Message::Binary(frame.into())).await;
-                log::info!("[asr] audio stream ended, last frame sent");
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(3),
+                    write.send(Message::Binary(frame.into())),
+                )
+                .await
+                {
+                    Ok(Ok(())) => {
+                        sent_last_frame = true;
+                        log::info!("[asr] audio stream ended, last frame sent");
+                    }
+                    Ok(Err(e)) => {
+                        log::error!("[asr] send last frame error: {}", e);
+                    }
+                    Err(_) => {
+                        log::error!("[asr] send last frame timeout");
+                    }
+                }
                 break;
             }
         }
     }
 
+    if !sent_last_frame {
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            write.send(Message::Close(None)),
+        )
+        .await;
+        log::info!("[asr] session stopped before last frame, close sent");
+    }
+
     // 等待接收任务完成（服务端返回最终结果）
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(10), recv_task).await;
+    let wait_secs = if sent_last_frame { 10 } else { 1 };
+    match tokio::time::timeout(std::time::Duration::from_secs(wait_secs), &mut recv_task).await {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => {
+            log::warn!("[asr] recv task join error: {}", e);
+        }
+        Err(_) => {
+            log::warn!("[asr] recv task timeout after {}s, aborting", wait_secs);
+            recv_task.abort();
+            let _ = recv_task.await;
+        }
+    }
 
     if let Ok(mut running) = is_running.lock() {
         *running = false;
