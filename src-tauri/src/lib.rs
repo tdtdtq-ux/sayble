@@ -20,6 +20,50 @@ use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
 use tauri::{Emitter, Manager};
 use tauri_plugin_autostart::ManagerExt;
 
+const FLOATING_WINDOW_WIDTH: f64 = 300.0;
+const FLOATING_WINDOW_HEIGHT: f64 = 52.0;
+const FLOATING_WINDOW_BOTTOM_GAP: f64 = 16.0;
+
+fn show_floating_window(app: &tauri::AppHandle) {
+    let Some(window) = app.get_webview_window("floating") else {
+        log::warn!("[floating] window not found");
+        return;
+    };
+
+    let monitor = app
+        .cursor_position()
+        .ok()
+        .and_then(|position| app.monitor_from_point(position.x, position.y).ok().flatten())
+        .or_else(|| window.current_monitor().ok().flatten())
+        .or_else(|| window.primary_monitor().ok().flatten());
+
+    if let Some(monitor) = monitor {
+        let scale = monitor.scale_factor();
+        let work_area = monitor.work_area();
+        let width = FLOATING_WINDOW_WIDTH * scale;
+        let height = FLOATING_WINDOW_HEIGHT * scale;
+        let gap = FLOATING_WINDOW_BOTTOM_GAP * scale;
+        let x = work_area.position.x as f64 + ((work_area.size.width as f64 - width) / 2.0);
+        let y = work_area.position.y as f64 + work_area.size.height as f64 - height - gap;
+
+        if let Err(e) = window.set_position(tauri::PhysicalPosition::new(
+            x.round() as i32,
+            y.round() as i32,
+        )) {
+            log::warn!("[floating] failed to position window: {}", e);
+        }
+    } else {
+        log::warn!("[floating] no monitor available for positioning");
+    }
+
+    if let Err(e) = window.set_always_on_top(true) {
+        log::warn!("[floating] failed to keep window on top: {}", e);
+    }
+    if let Err(e) = window.show() {
+        log::error!("[floating] failed to show window: {}", e);
+    }
+}
+
 /// 检查自启动注册表项是否被第三方软件（如 QQ、360 等）禁用
 /// 返回禁用该项的子键名称（如 "QQDisabled"），未被禁用则返回 None
 #[cfg(target_os = "windows")]
@@ -1241,6 +1285,8 @@ fn start_recording_inner(
         f.stop_tx = Some(stop_tx);
         log::debug!("[recording] session {} flag set: is_recording=true", session_id);
     }
+
+    show_floating_window(app);
 
     Ok(session_id)
 }

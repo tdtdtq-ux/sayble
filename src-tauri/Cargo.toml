@@ -1,6 +1,6 @@
 [package]
 name = "sayble"
-version = "0.2.1"
+version = "0.2.3"
 description = "Sayble - 跨平台桌面语音输入工具"
 authors = ["you"]
 edition = "2021"
@@ -56,4 +56,3 @@ mockall = "0.13"
 tempfile = "3"
 dotenvy = "0.15"
 symphonia = { version = "0.5", features = ["mp3"] }
-

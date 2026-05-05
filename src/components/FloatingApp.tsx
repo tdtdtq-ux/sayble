@@ -1,8 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
-import { LogicalPosition } from "@tauri-apps/api/dpi";
+import {
+  getCurrentWindow,
+  currentMonitor,
+  cursorPosition,
+  monitorFromPoint,
+  primaryMonitor,
+} from "@tauri-apps/api/window";
+import { PhysicalPosition } from "@tauri-apps/api/dpi";
 import { info, debug, error as logError } from "@tauri-apps/plugin-log";
 import { FloatingWindow, type FloatingStatus } from "@/components/FloatingWindow";
 
@@ -34,17 +40,39 @@ export function FloatingApp() {
   }, [clearTimer]);
 
   const showWindow = useCallback(async () => {
-    const monitor = await currentMonitor();
-    if (monitor) {
-      const screenWidth = monitor.size.width / monitor.scaleFactor;
-      const screenHeight = monitor.size.height / monitor.scaleFactor;
-      const winWidth = 300;
-      const winHeight = 52;
-      const x = Math.round((screenWidth - winWidth) / 2);
-      const y = Math.round(screenHeight - winHeight - 60);
-      await appWindow.setPosition(new LogicalPosition(x, y));
+    try {
+      const cursor = await cursorPosition();
+      const monitor =
+        (await monitorFromPoint(cursor.x, cursor.y)) ??
+        (await currentMonitor()) ??
+        (await primaryMonitor());
+      if (monitor) {
+        const winWidth = 300 * monitor.scaleFactor;
+        const winHeight = 52 * monitor.scaleFactor;
+        const bottomGap = 16 * monitor.scaleFactor;
+        const x = Math.round(
+          monitor.workArea.position.x + (monitor.workArea.size.width - winWidth) / 2
+        );
+        const y = Math.round(
+          monitor.workArea.position.y + monitor.workArea.size.height - winHeight - bottomGap
+        );
+        await appWindow.setPosition(new PhysicalPosition(x, y));
+      }
+    } catch (e) {
+      logError("[floating] failed to position window: " + String(e));
     }
-    await appWindow.show();
+
+    try {
+      await appWindow.setAlwaysOnTop(true);
+    } catch (e) {
+      logError("[floating] failed to keep window on top: " + String(e));
+    }
+
+    try {
+      await appWindow.show();
+    } catch (e) {
+      logError("[floating] failed to show window: " + String(e));
+    }
   }, []);
 
   const hideWindow = useCallback(async () => {
