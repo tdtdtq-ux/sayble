@@ -1,5 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { type LucideIcon } from "lucide-react";
+import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { AppIcon } from "./AppIcon";
 import { useSettingsStore } from "@/stores/useSettingsStore";
@@ -30,6 +31,11 @@ interface ShellLayoutProps {
 export function ShellLayout({ menuItems, activeTab, onTabChange, footer, children }: ShellLayoutProps) {
   const updateAvailable = useSettingsStore((s) => s.updateAvailable);
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
+  const [version, setVersion] = useState("");
+
+  useEffect(() => {
+    getVersion().then(setVersion).catch(() => setVersion(""));
+  }, []);
 
   return (
     <div className="h-full flex">
@@ -65,7 +71,14 @@ export function ShellLayout({ menuItems, activeTab, onTabChange, footer, childre
             </button>
           ))}
         </nav>
-        {footer}
+        <div className="shrink-0">
+          {footer}
+          {version && (
+            <div className="px-7 pb-4 -mt-2 text-[11px] tabular-nums text-muted-foreground/60">
+              v{version}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 右侧内容区 */}

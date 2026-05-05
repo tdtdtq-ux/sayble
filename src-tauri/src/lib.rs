@@ -24,6 +24,30 @@ const FLOATING_WINDOW_WIDTH: f64 = 300.0;
 const FLOATING_WINDOW_HEIGHT: f64 = 52.0;
 const FLOATING_WINDOW_BOTTOM_GAP: f64 = 16.0;
 
+#[cfg(target_os = "windows")]
+fn force_window_topmost(window: &tauri::WebviewWindow) {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW,
+    };
+
+    match window.hwnd() {
+        Ok(hwnd) => {
+            let flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW;
+            let hwnd = HWND(hwnd.0);
+            if let Err(e) = unsafe { SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, flags) } {
+                log::warn!("[floating] failed to force topmost window: {}", e);
+            }
+        }
+        Err(e) => {
+            log::warn!("[floating] failed to get window handle: {}", e);
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn force_window_topmost(_window: &tauri::WebviewWindow) {}
+
 fn show_floating_window(app: &tauri::AppHandle) {
     let Some(window) = app.get_webview_window("floating") else {
         log::warn!("[floating] window not found");
@@ -62,6 +86,7 @@ fn show_floating_window(app: &tauri::AppHandle) {
     if let Err(e) = window.show() {
         log::error!("[floating] failed to show window: {}", e);
     }
+    force_window_topmost(&window);
 }
 
 /// 检查自启动注册表项是否被第三方软件（如 QQ、360 等）禁用

@@ -63,15 +63,15 @@ export function FloatingApp() {
     }
 
     try {
-      await appWindow.setAlwaysOnTop(true);
-    } catch (e) {
-      logError("[floating] failed to keep window on top: " + String(e));
-    }
-
-    try {
       await appWindow.show();
     } catch (e) {
       logError("[floating] failed to show window: " + String(e));
+    }
+
+    try {
+      await appWindow.setAlwaysOnTop(true);
+    } catch (e) {
+      logError("[floating] failed to keep window on top: " + String(e));
     }
   }, []);
 
