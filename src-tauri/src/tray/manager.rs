@@ -1,4 +1,5 @@
 use crate::config::AppState;
+use crate::tunnel::TunnelManager;
 use tauri::{
     image::Image,
     menu::{MenuBuilder, MenuItemBuilder},
@@ -56,6 +57,9 @@ impl TrayManager {
                         let _ = app.emit("show-about", ());
                     }
                     "quit" => {
+                        if let Some(manager) = app.try_state::<Arc<TunnelManager>>() {
+                            manager.stop_all();
+                        }
                         app.exit(0);
                     }
                     _ => {}

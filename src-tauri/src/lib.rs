@@ -6,6 +6,7 @@ pub mod input;
 pub mod polish;
 pub mod store;
 pub mod tray;
+pub mod tunnel;
 
 use asr::AsrEvent;
 use asr::volcengine::VolcEngineAsr;
@@ -15,6 +16,7 @@ use hotkey::HotkeyManager;
 use input::{ClipboardOutput, SimulateOutput};
 use store::AppStore;
 use tray::TrayManager;
+use tunnel::TunnelManager;
 
 use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
 use tauri::{Emitter, Manager};
@@ -588,6 +590,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let handle = app.handle().clone();
 
@@ -668,6 +671,12 @@ pub fn run() {
                 cancelled: Arc::new(AtomicBool::new(false)),
             }));
             app.manage(recording_flag.clone());
+
+            // SSH 隧道模块：独立管理配置、进程、日志和自动重连
+            let tunnel_manager = TunnelManager::init(handle.clone())
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            tunnel_manager.start_autostart_tunnels();
+            app.manage(tunnel_manager);
 
             // 后台线程：轮询 HotkeyManager 事件，直接控制录音启停
             // 不再 emit hotkey-event 给前端，彻底绕过 WebView
@@ -809,6 +818,15 @@ pub fn run() {
             cmd_remove_history,
             cmd_check_update,
             cmd_inject_key_event,
+            tunnel::cmd_list_tunnels,
+            tunnel::cmd_save_tunnel,
+            tunnel::cmd_delete_tunnel,
+            tunnel::cmd_start_tunnel,
+            tunnel::cmd_stop_tunnel,
+            tunnel::cmd_restart_tunnel,
+            tunnel::cmd_get_tunnel_statuses,
+            tunnel::cmd_load_tunnel_logs,
+            tunnel::cmd_clear_tunnel_logs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

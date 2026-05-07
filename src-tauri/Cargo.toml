@@ -1,6 +1,6 @@
 [package]
 name = "sayble"
-version = "0.2.4"
+version = "0.2.5"
 description = "Sayble - 跨平台桌面语音输入工具"
 authors = ["you"]
 edition = "2021"
@@ -20,6 +20,7 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-os = "2"
+tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }

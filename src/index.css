@@ -62,6 +62,12 @@
     background: #171717;
     overflow: hidden;
   }
+  html.tunnel-notification-window,
+  html.tunnel-notification-window body,
+  html.tunnel-notification-window #root {
+    background: transparent;
+    overflow: hidden;
+  }
 }
 
 /* 数字/英文展示字体 */
