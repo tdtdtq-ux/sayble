@@ -26,6 +26,20 @@ const FLOATING_WINDOW_WIDTH: f64 = 300.0;
 const FLOATING_WINDOW_HEIGHT: f64 = 52.0;
 const FLOATING_WINDOW_BOTTOM_GAP: f64 = 16.0;
 
+#[derive(Clone, Copy, Debug)]
+struct WindowFrame {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+}
+
+impl WindowFrame {
+    fn center(&self) -> (f64, f64) {
+        (self.x + self.width / 2.0, self.y + self.height / 2.0)
+    }
+}
+
 #[cfg(target_os = "windows")]
 fn force_window_topmost(window: &tauri::WebviewWindow) {
     use windows::Win32::Foundation::HWND;
@@ -50,16 +64,77 @@ fn force_window_topmost(window: &tauri::WebviewWindow) {
 #[cfg(not(target_os = "windows"))]
 fn force_window_topmost(_window: &tauri::WebviewWindow) {}
 
-fn show_floating_window(app: &tauri::AppHandle) {
-    let Some(window) = app.get_webview_window("floating") else {
-        log::warn!("[floating] window not found");
-        return;
+#[cfg(target_os = "windows")]
+fn foreground_window_frame(floating_window: &tauri::WebviewWindow) -> Option<WindowFrame> {
+    use std::mem::size_of;
+    use windows::Win32::Foundation::{HWND, RECT};
+    use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetWindowRect, IsIconic, IsWindowVisible,
     };
 
-    let monitor = app
-        .cursor_position()
-        .ok()
-        .and_then(|position| app.monitor_from_point(position.x, position.y).ok().flatten())
+    let hwnd = unsafe { GetForegroundWindow() };
+    if hwnd.0.is_null()
+        || unsafe { IsIconic(hwnd).as_bool() }
+        || !unsafe { IsWindowVisible(hwnd).as_bool() }
+    {
+        return None;
+    }
+
+    if let Ok(floating_hwnd) = floating_window.hwnd() {
+        if HWND(floating_hwnd.0) == hwnd {
+            return None;
+        }
+    }
+
+    let mut rect = RECT::default();
+    let dwm_result = unsafe {
+        DwmGetWindowAttribute(
+            hwnd,
+            DWMWA_EXTENDED_FRAME_BOUNDS,
+            &mut rect as *mut _ as *mut _,
+            size_of::<RECT>() as u32,
+        )
+    };
+    if dwm_result.is_err() && unsafe { GetWindowRect(hwnd, &mut rect) }.is_err() {
+        return None;
+    }
+
+    let width = rect.right - rect.left;
+    let height = rect.bottom - rect.top;
+    if width <= 0 || height <= 0 {
+        return None;
+    }
+
+    Some(WindowFrame {
+        x: rect.left as f64,
+        y: rect.top as f64,
+        width: width as f64,
+        height: height as f64,
+    })
+}
+
+#[cfg(not(target_os = "windows"))]
+fn foreground_window_frame(_floating_window: &tauri::WebviewWindow) -> Option<WindowFrame> {
+    None
+}
+
+fn clamp_to_range(value: f64, min: f64, max: f64) -> f64 {
+    if max < min {
+        min
+    } else {
+        value.clamp(min, max)
+    }
+}
+
+fn position_floating_window(app: &tauri::AppHandle, window: &tauri::WebviewWindow) {
+    let target_frame = foreground_window_frame(window);
+    let target_monitor = target_frame.and_then(|frame| {
+        let (x, y) = frame.center();
+        app.monitor_from_point(x, y).ok().flatten()
+    });
+
+    let monitor = target_monitor
         .or_else(|| window.current_monitor().ok().flatten())
         .or_else(|| window.primary_monitor().ok().flatten());
 
@@ -69,8 +144,33 @@ fn show_floating_window(app: &tauri::AppHandle) {
         let width = FLOATING_WINDOW_WIDTH * scale;
         let height = FLOATING_WINDOW_HEIGHT * scale;
         let gap = FLOATING_WINDOW_BOTTOM_GAP * scale;
-        let x = work_area.position.x as f64 + ((work_area.size.width as f64 - width) / 2.0);
-        let y = work_area.position.y as f64 + work_area.size.height as f64 - height - gap;
+        let work_left = work_area.position.x as f64;
+        let work_top = work_area.position.y as f64;
+        let work_right = work_left + work_area.size.width as f64;
+        let work_bottom = work_top + work_area.size.height as f64;
+
+        let (preferred_x, preferred_y) = if let Some(frame) = target_frame {
+            log::debug!(
+                "[floating] positioning by foreground window: x={}, y={}, w={}, h={}",
+                frame.x,
+                frame.y,
+                frame.width,
+                frame.height
+            );
+            (
+                frame.x + (frame.width - width) / 2.0,
+                frame.y + frame.height - height - gap,
+            )
+        } else {
+            log::debug!("[floating] positioning by monitor fallback");
+            (
+                work_left + ((work_area.size.width as f64 - width) / 2.0),
+                work_bottom - height - gap,
+            )
+        };
+
+        let x = clamp_to_range(preferred_x, work_left + gap, work_right - width - gap);
+        let y = clamp_to_range(preferred_y, work_top + gap, work_bottom - height - gap);
 
         if let Err(e) = window.set_position(tauri::PhysicalPosition::new(
             x.round() as i32,
@@ -81,14 +181,25 @@ fn show_floating_window(app: &tauri::AppHandle) {
     } else {
         log::warn!("[floating] no monitor available for positioning");
     }
+}
+
+fn show_floating_window(app: &tauri::AppHandle) -> Result<(), String> {
+    let Some(window) = app.get_webview_window("floating") else {
+        log::warn!("[floating] window not found");
+        return Err("floating window not found".to_string());
+    };
+
+    position_floating_window(app, &window);
 
     if let Err(e) = window.set_always_on_top(true) {
         log::warn!("[floating] failed to keep window on top: {}", e);
     }
     if let Err(e) = window.show() {
         log::error!("[floating] failed to show window: {}", e);
+        return Err(format!("failed to show floating window: {}", e));
     }
     force_window_topmost(&window);
+    Ok(())
 }
 
 /// 检查自启动注册表项是否被第三方软件（如 QQ、360 等）禁用
@@ -818,6 +929,7 @@ pub fn run() {
             cmd_remove_history,
             cmd_check_update,
             cmd_inject_key_event,
+            cmd_show_floating_window,
             tunnel::cmd_list_tunnels,
             tunnel::cmd_save_tunnel,
             tunnel::cmd_delete_tunnel,
@@ -1329,7 +1441,9 @@ fn start_recording_inner(
         log::debug!("[recording] session {} flag set: is_recording=true", session_id);
     }
 
-    show_floating_window(app);
+    if let Err(e) = show_floating_window(app) {
+        log::warn!("[floating] failed to show on recording start: {}", e);
+    }
 
     Ok(session_id)
 }
@@ -1392,6 +1506,12 @@ fn cmd_cancel_recording(
 ) -> Result<Option<u64>, String> {
     log::info!("[cmd] cancel_recording called");
     cancel_recording_inner(&flag)
+}
+
+#[tauri::command]
+fn cmd_show_floating_window(app: tauri::AppHandle) -> Result<(), String> {
+    log::debug!("[cmd] show_floating_window called");
+    show_floating_window(&app)
 }
 
 #[tauri::command]

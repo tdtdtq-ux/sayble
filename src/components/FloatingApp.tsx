@@ -1,14 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import {
-  getCurrentWindow,
-  currentMonitor,
-  cursorPosition,
-  monitorFromPoint,
-  primaryMonitor,
-} from "@tauri-apps/api/window";
-import { PhysicalPosition } from "@tauri-apps/api/dpi";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { info, debug, error as logError } from "@tauri-apps/plugin-log";
 import { FloatingWindow, type FloatingStatus } from "@/components/FloatingWindow";
 
@@ -41,37 +34,15 @@ export function FloatingApp() {
 
   const showWindow = useCallback(async () => {
     try {
-      const cursor = await cursorPosition();
-      const monitor =
-        (await monitorFromPoint(cursor.x, cursor.y)) ??
-        (await currentMonitor()) ??
-        (await primaryMonitor());
-      if (monitor) {
-        const winWidth = 300 * monitor.scaleFactor;
-        const winHeight = 52 * monitor.scaleFactor;
-        const bottomGap = 16 * monitor.scaleFactor;
-        const x = Math.round(
-          monitor.workArea.position.x + (monitor.workArea.size.width - winWidth) / 2
-        );
-        const y = Math.round(
-          monitor.workArea.position.y + monitor.workArea.size.height - winHeight - bottomGap
-        );
-        await appWindow.setPosition(new PhysicalPosition(x, y));
+      await invoke("cmd_show_floating_window");
+    } catch (e) {
+      logError("[floating] backend show failed: " + String(e));
+      try {
+        await appWindow.show();
+        await appWindow.setAlwaysOnTop(true);
+      } catch (fallbackError) {
+        logError("[floating] failed to show window: " + String(fallbackError));
       }
-    } catch (e) {
-      logError("[floating] failed to position window: " + String(e));
-    }
-
-    try {
-      await appWindow.show();
-    } catch (e) {
-      logError("[floating] failed to show window: " + String(e));
-    }
-
-    try {
-      await appWindow.setAlwaysOnTop(true);
-    } catch (e) {
-      logError("[floating] failed to keep window on top: " + String(e));
     }
   }, []);
 
