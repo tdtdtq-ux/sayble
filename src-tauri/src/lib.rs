@@ -25,6 +25,9 @@ use tauri_plugin_autostart::ManagerExt;
 const FLOATING_WINDOW_WIDTH: f64 = 300.0;
 const FLOATING_WINDOW_HEIGHT: f64 = 52.0;
 const FLOATING_WINDOW_BOTTOM_GAP: f64 = 16.0;
+const RECORDING_SILENCE_AUTO_STOP_SECS: u64 = 30;
+const RECORDING_MAX_DURATION_SECS: u64 = 120;
+const SILENCE_RMS_THRESHOLD: f64 = 450.0;
 
 #[derive(Clone, Copy, Debug)]
 struct WindowFrame {
@@ -413,6 +416,41 @@ enum RecordingConfig {
     Volcengine { asr_config: AsrConfig, device_name: String },
     #[cfg(target_os = "windows")]
     Sapi,
+}
+
+fn rms_amplitude(samples: &[i16]) -> f64 {
+    if samples.is_empty() {
+        return 0.0;
+    }
+
+    let sum_squares: f64 = samples
+        .iter()
+        .map(|&sample| {
+            let sample = sample as f64;
+            sample * sample
+        })
+        .sum();
+
+    (sum_squares / samples.len() as f64).sqrt()
+}
+
+fn is_silent_audio(samples: &[i16]) -> bool {
+    rms_amplitude(samples) < SILENCE_RMS_THRESHOLD
+}
+
+fn recording_auto_stop_reason(
+    started_at: std::time::Instant,
+    last_voice_at: std::time::Instant,
+) -> Option<&'static str> {
+    if started_at.elapsed() >= std::time::Duration::from_secs(RECORDING_MAX_DURATION_SECS) {
+        return Some("max duration");
+    }
+
+    if last_voice_at.elapsed() >= std::time::Duration::from_secs(RECORDING_SILENCE_AUTO_STOP_SECS) {
+        return Some("silence timeout");
+    }
+
+    None
 }
 
 /// 从前端快捷键标签字符串解析为 HotkeyConfig 列表
@@ -1194,7 +1232,6 @@ fn start_recording_inner(
 
             // 在独立线程中启动音频采集并桥接到 ASR
             let flag_clone = Arc::clone(flag);
-            let is_running_clone2 = is_running.clone();
             let my_session_id = session_id;
             std::thread::spawn(move || {
                 let mut audio_capture = AudioCapture::new();
@@ -1215,15 +1252,39 @@ fn start_recording_inner(
 
                 // 转发音频数据到 ASR。不要在队列满时无限 blocking_send；
                 // ASR 连接卡住时仍要能响应 stop/cancel。
+                let started_at = std::time::Instant::now();
+                let mut last_voice_at = started_at;
                 'forward_audio: loop {
                     if stop_rx.try_recv().is_ok() {
                         break;
                     }
+                    if let Some(reason) = recording_auto_stop_reason(started_at, last_voice_at) {
+                        log::info!(
+                            "[recording] session {} auto stopping: {}",
+                            my_session_id,
+                            reason
+                        );
+                        break;
+                    }
                     match capture_rx.recv_timeout(std::time::Duration::from_millis(100)) {
                         Ok(samples) => {
+                            if !is_silent_audio(&samples) {
+                                last_voice_at = std::time::Instant::now();
+                            }
+
                             let mut pending = Some(samples);
                             while let Some(samples) = pending.take() {
                                 if stop_rx.try_recv().is_ok() {
+                                    break 'forward_audio;
+                                }
+                                if let Some(reason) =
+                                    recording_auto_stop_reason(started_at, last_voice_at)
+                                {
+                                    log::info!(
+                                        "[recording] session {} auto stopping while sending audio: {}",
+                                        my_session_id,
+                                        reason
+                                    );
                                     break 'forward_audio;
                                 }
                                 match audio_tx.try_send(samples) {
@@ -1246,10 +1307,6 @@ fn start_recording_inner(
                 // 停止采集，drop audio_tx 触发 ASR 发送 last frame
                 audio_capture.stop();
                 drop(audio_tx);
-
-                if let Ok(mut running) = is_running_clone2.lock() {
-                    *running = false;
-                }
 
                 if let Ok(mut f) = flag_clone.lock() {
                     if f.session_id == my_session_id {
@@ -1624,4 +1681,50 @@ fn cmd_inject_key_event(
     let mgr = hotkey_mgr.lock().map_err(|e| e.to_string())?;
     mgr.inject_key_event(vk_code, is_down);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rms_amplitude_handles_empty_audio() {
+        assert_eq!(rms_amplitude(&[]), 0.0);
+    }
+
+    #[test]
+    fn is_silent_audio_uses_rms_threshold() {
+        assert!(is_silent_audio(&[0, 100, -100, 200, -200]));
+        assert!(!is_silent_audio(&[1200, -1200, 1200, -1200]));
+    }
+
+    #[test]
+    fn recording_auto_stop_detects_silence_timeout() {
+        let now = std::time::Instant::now();
+        let last_voice_at = now
+            .checked_sub(std::time::Duration::from_secs(
+                RECORDING_SILENCE_AUTO_STOP_SECS + 1,
+            ))
+            .unwrap();
+
+        assert_eq!(
+            recording_auto_stop_reason(now, last_voice_at),
+            Some("silence timeout")
+        );
+    }
+
+    #[test]
+    fn recording_auto_stop_prefers_max_duration() {
+        let now = std::time::Instant::now();
+        let started_at = now
+            .checked_sub(std::time::Duration::from_secs(
+                RECORDING_MAX_DURATION_SECS + 1,
+            ))
+            .unwrap();
+
+        assert_eq!(
+            recording_auto_stop_reason(started_at, now),
+            Some("max duration")
+        );
+    }
 }
