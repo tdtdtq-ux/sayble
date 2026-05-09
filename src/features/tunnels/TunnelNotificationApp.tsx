@@ -13,8 +13,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const appWindow = getCurrentWindow();
-const WINDOW_WIDTH = 360;
-const WINDOW_HEIGHT = 108;
+const WINDOW_WIDTH = 340;
+const WINDOW_HEIGHT = 84;
 const WINDOW_GAP = 18;
 const HIDE_DELAY = 8000;
 
@@ -105,33 +105,39 @@ export function TunnelNotificationApp() {
   const isSuccess = notification?.level === "success";
 
   return (
-    <div className="flex h-screen w-screen items-center justify-center p-2">
+    <div className="h-screen w-screen">
       {notification && (
         <div
           className={cn(
-            "w-full rounded-lg border bg-background/95 p-3 shadow-lg backdrop-blur",
-            isSuccess ? "border-border" : "border-destructive/30",
+            "grid h-full w-full grid-cols-[2rem_1fr_1.75rem] items-start gap-3 overflow-hidden rounded-md border bg-background px-3.5 py-3 shadow-none",
+            isSuccess ? "border-border" : "border-destructive/35",
           )}
         >
-          <div className="flex items-start gap-3">
-            <div
-              className={cn(
-                "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md",
-                isSuccess ? "bg-primary text-primary-foreground" : "bg-destructive text-white",
-              )}
-            >
-              {isSuccess ? <CheckCircle2 className="size-4" /> : <TriangleAlert className="size-4" />}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold">{notification.title}</div>
-              <div className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
-                {notification.body}
-              </div>
-            </div>
-            <Button variant="ghost" size="icon-xs" onClick={hide} aria-label="关闭通知">
-              <X />
-            </Button>
+          <div
+            className={cn(
+              "flex size-8 items-center justify-center rounded-md",
+              isSuccess ? "bg-primary text-primary-foreground" : "bg-destructive text-white",
+            )}
+          >
+            {isSuccess ? <CheckCircle2 className="size-4" /> : <TriangleAlert className="size-4" />}
           </div>
+
+          <div className="min-w-0 pt-px">
+            <div className="truncate text-sm font-semibold leading-5">{notification.title}</div>
+            <div className="mt-0.5 line-clamp-2 text-xs leading-[18px] text-muted-foreground">
+              {notification.body}
+            </div>
+          </div>
+
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="-mr-1 -mt-1 size-7 rounded-md text-muted-foreground/70 hover:text-foreground [&_svg]:size-3.5"
+            onClick={hide}
+            aria-label="关闭通知"
+          >
+            <X />
+          </Button>
         </div>
       )}
     </div>
