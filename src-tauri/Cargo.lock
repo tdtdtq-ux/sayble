@@ -4342,7 +4342,7 @@ dependencies = [
 
 [[package]]
 name = "sayble"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "arboard",
  "byteorder",

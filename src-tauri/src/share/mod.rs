@@ -466,6 +466,15 @@ h1 {{ margin: 0; font-size: 24px; }}
 .meta {{ margin-top: 5px; color: #777; font-size: 12px; }}
 a {{ border-radius: 8px; background: #171717; color: #fff; padding: 9px 12px; text-decoration: none; white-space: nowrap; font-size: 14px; }}
 .empty {{ border: 1px dashed #cfcfcf; border-radius: 10px; padding: 28px 16px; text-align: center; color: #777; background: #fff; }}
+.chrome-warning[hidden] {{ display: none; }}
+.chrome-warning {{ position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(22, 22, 22, 0.5); }}
+.chrome-warning-card {{ width: min(100%, 380px); border-radius: 14px; background: #fff; padding: 20px; box-shadow: 0 18px 46px rgba(0, 0, 0, 0.24); }}
+.chrome-warning-title {{ margin: 0; font-size: 19px; font-weight: 750; }}
+.chrome-warning-text {{ margin: 10px 0 18px; color: #555; font-size: 14px; line-height: 1.65; }}
+.chrome-warning-actions {{ display: flex; gap: 10px; justify-content: flex-end; }}
+.chrome-warning button {{ border: 0; border-radius: 8px; padding: 10px 12px; font-size: 14px; font-weight: 650; }}
+.chrome-warning .secondary {{ background: #efefef; color: #222; }}
+.chrome-warning .primary {{ background: #171717; color: #fff; }}
 </style>
 </head>
 <body>
@@ -474,7 +483,56 @@ a {{ border-radius: 8px; background: #171717; color: #fff; padding: 9px 12px; te
 <p class="sub">来自桌面端的临时共享文件</p>
 <div id="files" class="empty">暂无共享文件</div>
 </main>
+<div id="chrome-warning" class="chrome-warning" role="dialog" aria-modal="true" aria-labelledby="chrome-warning-title" hidden>
+  <div class="chrome-warning-card">
+    <h2 id="chrome-warning-title" class="chrome-warning-title">请更换浏览器下载</h2>
+    <p class="chrome-warning-text">检测到你正在使用 Chrome。Chrome 经常会拦截 APK、EXE 或包含安装包的 ZIP 下载。为了顺利下载测试包，请复制当前链接，换用手机自带浏览器、Firefox 或下载器打开。</p>
+    <div class="chrome-warning-actions">
+      <button id="chrome-warning-copy" class="secondary" type="button">复制链接</button>
+      <button id="chrome-warning-close" class="primary" type="button">知道了</button>
+    </div>
+  </div>
+</div>
 <script>
+const isChromeBrowser = () => {{
+  const ua = navigator.userAgent || "";
+  const vendor = navigator.vendor || "";
+  const isChrome = ua.includes("Chrome/") && (vendor === "" || vendor.includes("Google"));
+  const isCriOS = ua.includes("CriOS/");
+  const isOtherChromium = /Edg|OPR|Opera|SamsungBrowser|UCBrowser|QQBrowser|MiuiBrowser|HuaweiBrowser/i.test(ua);
+  return (isChrome || isCriOS) && !isOtherChromium;
+}};
+const showChromeWarning = () => {{
+  if (!isChromeBrowser()) return;
+  const warning = document.getElementById("chrome-warning");
+  const close = document.getElementById("chrome-warning-close");
+  const copy = document.getElementById("chrome-warning-copy");
+  if (!warning || !close || !copy) return;
+  warning.hidden = false;
+  close.addEventListener("click", () => {{
+    warning.hidden = true;
+  }});
+  copy.addEventListener("click", async () => {{
+    try {{
+      if (navigator.clipboard && window.isSecureContext) {{
+        await navigator.clipboard.writeText(window.location.href);
+      }} else {{
+        const input = document.createElement("textarea");
+        input.value = window.location.href;
+        input.setAttribute("readonly", "");
+        input.style.position = "fixed";
+        input.style.opacity = "0";
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand("copy");
+        document.body.removeChild(input);
+      }}
+      copy.textContent = "已复制";
+    }} catch (e) {{
+      copy.textContent = "请长按地址复制";
+    }}
+  }});
+}};
 const formatSize = (size) => {{
   if (size < 1024) return size + " B";
   if (size < 1024 * 1024) return (size / 1024).toFixed(1) + " KB";
@@ -512,6 +570,7 @@ async function load() {{
     el.textContent = "加载失败，请确认电脑和手机在同一网络";
   }}
 }}
+showChromeWarning();
 load();
 </script>
 </body>
