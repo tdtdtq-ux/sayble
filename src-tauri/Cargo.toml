@@ -1,6 +1,6 @@
 [package]
 name = "sayble"
-version = "0.2.7"
+version = "0.2.8"
 description = "Sayble - 跨平台桌面语音输入工具"
 authors = ["you"]
 edition = "2021"
@@ -37,6 +37,7 @@ byteorder = "1"
 url = "2"
 reqwest = { version = "0.13.2", default-features = false, features = ["rustls", "json"] }
 chrono = "0.4"
+local-ip-address = "0.6"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = [

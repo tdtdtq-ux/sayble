@@ -4,6 +4,7 @@ pub mod config;
 pub mod hotkey;
 pub mod input;
 pub mod polish;
+pub mod share;
 pub mod store;
 pub mod tray;
 pub mod tunnel;
@@ -14,6 +15,7 @@ use audio::AudioCapture;
 use config::{AppConfig, AsrConfig, HotkeyBinding, HotkeyConfig, OutputMode};
 use hotkey::HotkeyManager;
 use input::{ClipboardOutput, SimulateOutput};
+use share::ShareManager;
 use store::AppStore;
 use tray::TrayManager;
 use tunnel::TunnelManager;
@@ -827,6 +829,11 @@ pub fn run() {
             tunnel_manager.start_autostart_tunnels();
             app.manage(tunnel_manager);
 
+            // 本地共享 Web 服务：默认关闭，用户在共享页手动启动
+            let share_manager = ShareManager::init()
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            app.manage(share_manager);
+
             // 后台线程：轮询 HotkeyManager 事件，直接控制录音启停
             // 不再 emit hotkey-event 给前端，彻底绕过 WebView
             let hotkey_handle = handle.clone();
@@ -977,6 +984,13 @@ pub fn run() {
             tunnel::cmd_get_tunnel_statuses,
             tunnel::cmd_load_tunnel_logs,
             tunnel::cmd_clear_tunnel_logs,
+            share::cmd_get_share_state,
+            share::cmd_start_share_server,
+            share::cmd_stop_share_server,
+            share::cmd_set_share_host,
+            share::cmd_add_share_file,
+            share::cmd_remove_share_file,
+            share::cmd_clear_share_files,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

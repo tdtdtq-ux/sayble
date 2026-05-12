@@ -1,16 +1,18 @@
 import { useState } from "react";
-import { Settings, Home, UserRound, History, Cable } from "lucide-react";
+import { Settings, Home, UserRound, History, Cable, Share2 } from "lucide-react";
 import { ShellLayout, type ShellMenuItem } from "./ShellLayout";
 import { HomePage } from "./HomePage";
 import { PersonaPage } from "./PersonaPage";
 import { HistoryPage } from "./HistoryPage";
 import { TunnelPage } from "@/features/tunnels/TunnelPage";
+import { SharePage } from "@/features/share/SharePage";
 
 const menuItems: readonly ShellMenuItem[] = [
   { key: "home", label: "首页", icon: Home },
   { key: "history", label: "历史", icon: History },
   { key: "persona", label: "人设", icon: UserRound },
   { key: "tunnels", label: "隧道", icon: Cable },
+  { key: "share", label: "共享", icon: Share2 },
 ] as const;
 
 type TabKey = (typeof menuItems)[number]["key"];
@@ -43,6 +45,7 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
       {activeTab === "history" && <HistoryPage />}
       {activeTab === "persona" && <PersonaPage />}
       {activeTab === "tunnels" && <TunnelPage />}
+      {activeTab === "share" && <SharePage />}
     </ShellLayout>
   );
 }
