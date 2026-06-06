@@ -7,6 +7,8 @@ import QRCode from "qrcode";
 import { toast } from "sonner";
 import { Share2, Wifi } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ShareContentItem, ShareServerState, ShareUploadRecord, SharedFile } from "@/types/share";
 import { ContentTransferTab } from "./ContentTransferTab";
@@ -25,6 +27,8 @@ export function SharePage() {
   const [portInput, setPortInput] = useState("17321");
   const [contentDraft, setContentDraft] = useState("");
   const [statusMessage, setStatusMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [pendingDeleteUpload, setPendingDeleteUpload] = useState<ShareUploadRecord | null>(null);
+  const [deleteOriginalFile, setDeleteOriginalFile] = useState(false);
 
   const files = state?.files ?? [];
   const uploads = state?.uploads ?? [];
@@ -303,6 +307,30 @@ export function SharePage() {
     }
   };
 
+  const requestDeleteUpload = (upload: ShareUploadRecord) => {
+    setPendingDeleteUpload(upload);
+    setDeleteOriginalFile(false);
+  };
+
+  const deleteUpload = async () => {
+    if (!pendingDeleteUpload) return;
+    setBusy(true);
+    try {
+      const result = await invoke<ShareServerState>("cmd_delete_share_upload", {
+        id: pendingDeleteUpload.id,
+        deleteFile: deleteOriginalFile,
+      });
+      setState(result);
+      setPendingDeleteUpload(null);
+      setDeleteOriginalFile(false);
+      toast.success(deleteOriginalFile ? "上传记录和原文件已删除" : "上传记录已删除");
+    } catch (err) {
+      toast.error(`删除失败: ${err}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const selectHost = async (address: string) => {
     setBusy(true);
     try {
@@ -439,6 +467,7 @@ export function SharePage() {
               running={running}
               onChooseUploadDir={chooseUploadDir}
               onClearUploads={clearUploads}
+              onDeleteUpload={requestDeleteUpload}
               onUploadAction={uploadAction}
             />
           </TabsContent>
@@ -474,6 +503,63 @@ export function SharePage() {
           onCopyText={copyText}
         />
       </div>
+      <Dialog
+        open={pendingDeleteUpload !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDeleteUpload(null);
+            setDeleteOriginalFile(false);
+          }
+        }}
+      >
+        <DialogContent className="w-[min(calc(100vw-2rem),32rem)] max-w-[calc(100vw-2rem)] overflow-hidden">
+          <DialogHeader className="min-w-0">
+            <DialogTitle>删除上传记录</DialogTitle>
+            <DialogDescription>
+              删除记录不会影响手机端录像列表。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-w-0 space-y-3">
+            <div className="min-w-0 overflow-hidden rounded-md bg-muted/50 px-3 py-2 text-sm">
+              <div className="min-w-0 truncate font-medium" title={pendingDeleteUpload?.name}>
+                {pendingDeleteUpload?.name}
+              </div>
+              <div
+                className="mt-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs text-muted-foreground"
+                title={pendingDeleteUpload?.path || undefined}
+              >
+                {pendingDeleteUpload?.path || "没有本地文件路径"}
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="size-4 rounded border-border"
+                checked={deleteOriginalFile}
+                disabled={!pendingDeleteUpload?.path}
+                onChange={(event) => setDeleteOriginalFile(event.target.checked)}
+              />
+              同时删除本地原文件
+            </label>
+          </div>
+          <div className="flex w-full min-w-0 justify-end gap-2 pt-1">
+            <Button
+              variant="outline"
+              className="w-16"
+              disabled={busy}
+              onClick={() => {
+                setPendingDeleteUpload(null);
+                setDeleteOriginalFile(false);
+              }}
+            >
+              取消
+            </Button>
+            <Button className="w-16" variant="destructive" disabled={busy} onClick={() => void deleteUpload()}>
+              删除
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

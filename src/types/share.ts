@@ -21,6 +21,7 @@ export interface ShareUploadRecord {
   savedName: string | null;
   path: string | null;
   size: number;
+  durationSeconds: number | null;
   received: number;
   sourceIp: string;
   status: ShareUploadStatus;

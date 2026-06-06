@@ -102,6 +102,8 @@ pub struct ShareUploadRecord {
     pub saved_name: Option<String>,
     pub path: Option<PathBuf>,
     pub size: u64,
+    #[serde(default)]
+    pub duration_seconds: Option<f64>,
     pub received: u64,
     pub source_ip: String,
     pub status: ShareUploadStatus,
@@ -122,6 +124,8 @@ struct UploadPrepareRequest {
 struct UploadPrepareFile {
     name: String,
     size: u64,
+    #[serde(default)]
+    duration_seconds: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -453,6 +457,27 @@ impl ShareManager {
                     | ShareUploadStatus::Uploading
             )
         });
+        write_json(&self.upload_path, &*uploads)?;
+        drop(uploads);
+        Ok(self.state())
+    }
+
+    pub fn delete_upload(&self, id: String, delete_file: bool) -> Result<ShareServerState, String> {
+        let mut uploads = self.uploads.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(index) = uploads.iter().position(|item| item.id == id) else {
+            return Err("上传记录不存在".to_string());
+        };
+        if delete_file {
+            let Some(path) = uploads[index].path.clone() else {
+                return Err("上传记录没有原文件路径".to_string());
+            };
+            match fs::remove_file(&path) {
+                Ok(()) => {}
+                Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+                Err(e) => return Err(format!("删除原文件失败: {}", e)),
+            }
+        }
+        uploads.remove(index);
         write_json(&self.upload_path, &*uploads)?;
         drop(uploads);
         Ok(self.state())
@@ -937,6 +962,9 @@ impl ShareManager {
                     saved_name: None,
                     path: None,
                     size: file.size,
+                    duration_seconds: file
+                        .duration_seconds
+                        .filter(|duration| duration.is_finite() && *duration > 0.0),
                     received: 0,
                     source_ip: source_ip.clone(),
                     status: ShareUploadStatus::Pending,
@@ -1353,7 +1381,7 @@ main {{ max-width: 640px; margin: 0 auto; padding: 14px 12px; }}
 .meta {{ margin-top: 5px; color: #777; font-size: 12px; }}
 a {{ border-radius: 8px; background: #171717; color: #fff; padding: 9px 12px; text-decoration: none; white-space: nowrap; font-size: 14px; }}
 .empty {{ border: 1px dashed #cfcfcf; border-radius: 10px; padding: 28px 16px; text-align: center; color: #777; background: #fff; }}
-.tabs {{ flex: 1 1 auto; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; min-width: 0; padding: 3px; border-radius: 10px; background: #ececec; }}
+.tabs {{ flex: 1 1 auto; display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 4px; min-width: 0; padding: 3px; border-radius: 10px; background: #ececec; }}
 .tab {{ border: 0; border-radius: 8px; padding: 8px 6px; background: transparent; color: #555; font-size: 14px; font-weight: 700; }}
 .tab.active {{ background: #fff; color: #151515; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.08); }}
 .panel[hidden] {{ display: none; }}
@@ -1365,6 +1393,7 @@ a {{ border-radius: 8px; background: #171717; color: #fff; padding: 9px 12px; te
 .upload-main {{ min-width: 0; flex: 1; }}
 .status {{ display: inline-flex; align-items: center; border-radius: 999px; background: #eee; color: #555; padding: 3px 8px; font-size: 12px; font-weight: 700; white-space: nowrap; }}
 .status.completed {{ background: #e8f8ef; color: #177245; }}
+.status.pending, .status.uploading {{ background: #eef2ff; color: #3730a3; }}
 .status.failed, .status.rejected {{ background: #feecec; color: #b42318; }}
 .progress {{ width: 100%; height: 7px; overflow: hidden; border-radius: 999px; background: #ededed; margin-top: 8px; }}
 .bar {{ height: 100%; width: 0; border-radius: inherit; background: #171717; transition: width 160ms ease; }}
@@ -1375,6 +1404,28 @@ a {{ border-radius: 8px; background: #171717; color: #fff; padding: 9px 12px; te
 .content-item {{ border: 1px solid #e4e4e4; background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 10px; }}
 .content-text {{ margin-top: 8px; white-space: pre-wrap; word-break: break-word; font-size: 14px; line-height: 1.65; }}
 .secondary-button {{ border: 0; border-radius: 8px; background: #efefef; color: #222; padding: 9px 12px; font-size: 14px; font-weight: 650; }}
+.video-toolbar {{ display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }}
+.video-toolbar input {{ display: none; }}
+.orientation-badge {{ border-radius: 999px; background: #efefef; color: #555; padding: 5px 9px; font-size: 12px; font-weight: 700; white-space: nowrap; }}
+.video-list {{ display: flex; flex-direction: column; gap: 10px; }}
+.video-list > .empty {{ display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 16 / 9; padding: 0; }}
+.video-card {{ position: relative; overflow: hidden; border: 1px solid #e4e4e4; border-radius: 10px; background: #fff; }}
+.video-cover {{ display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: #111; }}
+.video-info {{ padding: 10px; }}
+.video-info button {{ min-width: 0; }}
+.video-title {{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 650; }}
+.video-meta {{ margin-top: 3px; color: #777; font-size: 12px; }}
+.video-actions {{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }}
+.video-actions button {{ width: 100%; }}
+@media (orientation: landscape) {{
+  main {{ max-width: none; padding: 10px 12px; }}
+  .video-list {{ flex-direction: row; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 6px; }}
+  .video-card {{ flex: 0 0 min(38vw, 320px); scroll-snap-align: start; }}
+  .video-list > .empty {{ flex: 0 0 min(38vw, 320px); }}
+}}
+@media (orientation: portrait) {{
+  .video-list {{ overflow-y: visible; }}
+}}
 .chrome-warning[hidden] {{ display: none; }}
 .chrome-warning {{ position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(22, 22, 22, 0.5); }}
 .chrome-warning-card {{ width: min(100%, 380px); border-radius: 14px; background: #fff; padding: 20px; box-shadow: 0 18px 46px rgba(0, 0, 0, 0.24); }}
@@ -1394,6 +1445,7 @@ a {{ border-radius: 8px; background: #171717; color: #fff; padding: 9px 12px; te
     <button id="tab-download" class="tab active" type="button">下载</button>
     <button id="tab-upload" class="tab" type="button">上传</button>
     <button id="tab-content" class="tab" type="button">内容</button>
+    <button id="tab-record" class="tab" type="button">录像</button>
   </div>
 </div>
 <section id="panel-download" class="panel">
@@ -1417,6 +1469,18 @@ a {{ border-radius: 8px; background: #171717; color: #fff; padding: 9px 12px; te
     </div>
   </div>
   <div id="contents" class="content-list"></div>
+</section>
+<section id="panel-record" class="panel" hidden>
+  <div class="video-toolbar">
+    <span id="orientation-badge" class="orientation-badge">检测中</span>
+    <div>
+      <input id="video-input" type="file" accept="video/*" capture="user" />
+      <button id="video-add" class="upload-button" type="button">添加视频</button>
+    </div>
+  </div>
+  <div id="videos" class="video-list">
+    <div class="empty">暂无视频</div>
+  </div>
 </section>
 </main>
 <div id="chrome-warning" class="chrome-warning" role="dialog" aria-modal="true" aria-labelledby="chrome-warning-title" hidden>
@@ -1475,6 +1539,15 @@ const formatSize = (size) => {{
   if (size < 1024 * 1024 * 1024) return (size / 1024 / 1024).toFixed(1) + " MB";
   return (size / 1024 / 1024 / 1024).toFixed(2) + " GB";
 }};
+const formatDuration = (seconds) => {{
+  if (!Number.isFinite(seconds) || seconds <= 0) return "读取中";
+  const total = Math.round(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${{h}}:${{String(m).padStart(2, "0")}}:${{String(s).padStart(2, "0")}}`;
+  return `${{m}}:${{String(s).padStart(2, "0")}}`;
+}};
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (ch) => ({{
   "&": "&amp;",
   "<": "&lt;",
@@ -1507,14 +1580,28 @@ async function load() {{
   }}
 }}
 const uploadItems = new Map();
+const recordedVideos = [];
 const setTab = (tab) => {{
   document.getElementById("tab-download").classList.toggle("active", tab === "download");
   document.getElementById("tab-upload").classList.toggle("active", tab === "upload");
   document.getElementById("tab-content").classList.toggle("active", tab === "content");
+  document.getElementById("tab-record").classList.toggle("active", tab === "record");
   document.getElementById("panel-download").hidden = tab !== "download";
   document.getElementById("panel-upload").hidden = tab !== "upload";
   document.getElementById("panel-content").hidden = tab !== "content";
+  document.getElementById("panel-record").hidden = tab !== "record";
 }};
+const orientationQuery = window.matchMedia("(orientation: landscape)");
+const updateOrientation = () => {{
+  const badge = document.getElementById("orientation-badge");
+  if (badge) badge.textContent = orientationQuery.matches ? "横屏" : "竖屏";
+}};
+if (orientationQuery.addEventListener) {{
+  orientationQuery.addEventListener("change", updateOrientation);
+}} else if (orientationQuery.addListener) {{
+  orientationQuery.addListener(updateOrientation);
+}}
+updateOrientation();
 const renderUploads = () => {{
   const el = document.getElementById("uploads");
   const items = Array.from(uploadItems.values());
@@ -1567,6 +1654,40 @@ const uploadFile = (record, file) => new Promise((resolve) => {{
   }};
   xhr.send(file);
 }});
+const readMediaDuration = (file) => new Promise((resolve) => {{
+  if (!file || !/^(audio|video)\//.test(file.type || "")) {{
+    resolve(null);
+    return;
+  }}
+  const element = document.createElement((file.type || "").startsWith("audio/") ? "audio" : "video");
+  const url = URL.createObjectURL(file);
+  let settled = false;
+  const finish = (value) => {{
+    if (settled) return;
+    settled = true;
+    URL.revokeObjectURL(url);
+    resolve(Number.isFinite(value) && value > 0 ? value : null);
+  }};
+  element.preload = "metadata";
+  element.src = url;
+  element.addEventListener("loadedmetadata", () => finish(element.duration), {{ once: true }});
+  element.addEventListener("error", () => finish(null), {{ once: true }});
+  setTimeout(() => finish(null), 1800);
+}});
+const prepareUploads = async (files, durationByFile = new Map()) => {{
+  const metadata = await Promise.all(files.map(async (file) => ({{
+    name: file.name,
+    size: file.size,
+    durationSeconds: durationByFile.has(file) ? durationByFile.get(file) : await readMediaDuration(file),
+  }})));
+  const response = await fetch("/api/upload/prepare", {{
+    method: "POST",
+    headers: {{ "Content-Type": "application/json" }},
+    body: JSON.stringify({{ files: metadata }}),
+  }});
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
+}};
 const pollBatch = (batchId, fileById) => {{
   const started = new Set();
   const timer = setInterval(async () => {{
@@ -1608,13 +1729,7 @@ const submitUpload = async () => {{
   if (files.length === 0) return;
   button.disabled = true;
   try {{
-    const response = await fetch("/api/upload/prepare", {{
-      method: "POST",
-      headers: {{ "Content-Type": "application/json" }},
-      body: JSON.stringify({{ files: files.map((file) => ({{ name: file.name, size: file.size }})) }}),
-    }});
-    if (!response.ok) throw new Error(await response.text());
-    const prepared = await response.json();
+    const prepared = await prepareUploads(files);
     const fileById = new Map();
     prepared.uploads.forEach((record, index) => {{
       const file = files[index];
@@ -1714,15 +1829,251 @@ const submitContent = async () => {{
     button.disabled = false;
   }}
 }};
+const readVideoDetails = (url) => new Promise((resolve) => {{
+  const video = document.createElement("video");
+  let duration = 0;
+  let seekTarget = 0;
+  let settled = false;
+  video.preload = "auto";
+  video.muted = true;
+  video.playsInline = true;
+  video.src = url;
+  const finish = () => {{
+    if (settled) return;
+    settled = true;
+    try {{
+      const width = video.videoWidth || 320;
+      const height = video.videoHeight || 180;
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {{
+        resolve({{ poster: "", duration }});
+        return;
+      }}
+      ctx.drawImage(video, 0, 0, width, height);
+      resolve({{ poster: canvas.toDataURL("image/jpeg", 0.72), duration }});
+    }} catch (e) {{
+      resolve({{ poster: "", duration }});
+    }}
+  }};
+  video.addEventListener("loadedmetadata", () => {{
+    duration = Number.isFinite(video.duration) ? video.duration : 0;
+    seekTarget = duration > 0.4 ? 0.2 : 0;
+    if (seekTarget > 0) {{
+      try {{
+        video.currentTime = seekTarget;
+      }} catch (e) {{
+        finish();
+      }}
+    }}
+  }}, {{ once: true }});
+  video.addEventListener("seeked", finish, {{ once: true }});
+  video.addEventListener("loadeddata", () => {{
+    if (!settled && seekTarget === 0) finish();
+  }}, {{ once: true }});
+  video.addEventListener("error", () => {{
+    if (!settled) {{
+      settled = true;
+      resolve({{ poster: "", duration }});
+    }}
+  }}, {{ once: true }});
+  setTimeout(() => {{
+    if (!settled) {{
+      settled = true;
+      resolve({{ poster: "", duration }});
+    }}
+  }}, 1800);
+}});
+const findVideoItem = (id) => recordedVideos.find((entry) => entry.id === id);
+const setVideoItem = (id, patch) => {{
+  const item = findVideoItem(id);
+  if (!item) return;
+  Object.assign(item, patch);
+  renderVideos();
+}};
+const videoUploadButtonText = (item) => {{
+  if (item.uploadStatus === "completed") return "已上传";
+  if (item.uploadStatus === "pending") return "等待接收";
+  if (item.uploadStatus === "uploading") return `上传中 ${{item.uploadProgress || 0}}%`;
+  if (item.uploadStatus === "failed" || item.uploadStatus === "rejected") return "重新上传";
+  return "上传";
+}};
+const videoUploadLabel = (item) => {{
+  if (item.uploadStatus === "completed") return "已上传";
+  if (item.uploadStatus === "pending") return "待接收";
+  if (item.uploadStatus === "uploading") return `上传中 ${{item.uploadProgress || 0}}%`;
+  if (item.uploadStatus === "rejected") return "已拒绝";
+  if (item.uploadStatus === "failed") return "上传失败";
+  return "";
+}};
+const renderVideos = () => {{
+  const el = document.getElementById("videos");
+  if (recordedVideos.length === 0) {{
+    el.innerHTML = '<div class="empty">暂无视频</div>';
+    return;
+  }}
+  el.innerHTML = recordedVideos.map((item) => `
+    <div class="video-card">
+      <video class="video-cover" src="${{escapeHtml(item.url)}}" preload="auto" controls playsinline ${{item.poster ? `poster="${{escapeHtml(item.poster)}}"` : ""}}></video>
+      <div class="video-info">
+        <div class="upload-main">
+          <div class="video-title">${{escapeHtml(item.name)}}</div>
+          <div class="video-meta">${{formatSize(item.size)}} · ${{formatDuration(item.duration)}} · ${{escapeHtml(item.createdAt)}}${{videoUploadLabel(item) ? ` · <span class="status ${{escapeHtml(item.uploadStatus)}}">${{escapeHtml(videoUploadLabel(item))}}</span>` : ""}}</div>
+        </div>
+        <div class="video-actions">
+          <button class="upload-button" type="button" data-upload-video="${{escapeHtml(item.id)}}" ${{["pending", "uploading", "completed"].includes(item.uploadStatus) ? "disabled" : ""}}>${{escapeHtml(videoUploadButtonText(item))}}</button>
+          <button class="secondary-button" type="button" data-delete-video="${{escapeHtml(item.id)}}">删除</button>
+        </div>
+      </div>
+    </div>
+  `).join("");
+  for (const video of el.querySelectorAll("video")) {{
+    video.addEventListener("play", () => {{
+      for (const other of el.querySelectorAll("video")) {{
+        if (other !== video) other.pause();
+      }}
+    }});
+  }}
+  for (const button of el.querySelectorAll("[data-upload-video]")) {{
+    button.addEventListener("click", (event) => {{
+      event.stopPropagation();
+      uploadRecordedVideo(button.getAttribute("data-upload-video"));
+    }});
+  }}
+  for (const button of el.querySelectorAll("[data-delete-video]")) {{
+    button.addEventListener("click", (event) => {{
+      event.stopPropagation();
+      deleteVideo(button.getAttribute("data-delete-video"));
+    }});
+  }}
+}};
+const addVideoFile = async (file) => {{
+  const url = URL.createObjectURL(file);
+  const now = new Date();
+  const createdAt = `${{String(now.getHours()).padStart(2, "0")}}:${{String(now.getMinutes()).padStart(2, "0")}}:${{String(now.getSeconds()).padStart(2, "0")}}`;
+  const item = {{
+    id: `${{Date.now()}}-${{Math.random().toString(16).slice(2)}}`,
+    name: file.name || "video",
+    size: file.size,
+    file,
+    url,
+    poster: "",
+    duration: 0,
+    createdAt,
+    uploadStatus: "idle",
+    uploadProgress: 0,
+    uploadMessage: "",
+  }};
+  recordedVideos.unshift(item);
+  renderVideos();
+  const details = await readVideoDetails(url);
+  item.poster = details.poster;
+  item.duration = details.duration;
+  renderVideos();
+}};
+const openVideoCapture = () => {{
+  document.getElementById("video-input").click();
+}};
+const uploadVideoBinary = (videoId, record) => {{
+  const item = findVideoItem(videoId);
+  if (!item || !item.file) return;
+  setVideoItem(videoId, {{ uploadStatus: "uploading", uploadProgress: 0, uploadMessage: "正在上传" }});
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", `/api/upload/${{encodeURIComponent(record.id)}}`);
+  xhr.upload.onprogress = (event) => {{
+    if (event.lengthComputable) {{
+      setVideoItem(videoId, {{ uploadProgress: Math.round((event.loaded / event.total) * 100) }});
+    }}
+  }};
+  xhr.onload = () => {{
+    if (xhr.status >= 200 && xhr.status < 300) {{
+      setVideoItem(videoId, {{ uploadStatus: "completed", uploadProgress: 100, uploadMessage: "" }});
+    }} else {{
+      setVideoItem(videoId, {{ uploadStatus: "failed", uploadMessage: xhr.responseText || "上传失败" }});
+    }}
+  }};
+  xhr.onerror = () => {{
+    setVideoItem(videoId, {{ uploadStatus: "failed", uploadMessage: "网络错误" }});
+  }};
+  xhr.send(item.file);
+}};
+const pollVideoUpload = (videoId, batchId, recordId) => {{
+  let started = false;
+  const timer = setInterval(async () => {{
+    const item = findVideoItem(videoId);
+    if (!item) {{
+      clearInterval(timer);
+      return;
+    }}
+    try {{
+      const status = await fetch(`/api/upload/batch/${{encodeURIComponent(batchId)}}`, {{ cache: "no-store" }}).then((r) => r.json());
+      const record = (status.uploads || []).find((entry) => entry.id === recordId);
+      if (!record) return;
+      if (record.status === "rejected") {{
+        setVideoItem(videoId, {{ uploadStatus: "rejected", uploadMessage: "电脑已拒绝" }});
+        clearInterval(timer);
+        return;
+      }}
+      if (record.status === "failed") {{
+        setVideoItem(videoId, {{ uploadStatus: "failed", uploadMessage: record.error || "上传失败" }});
+        clearInterval(timer);
+        return;
+      }}
+      if (record.status === "completed") {{
+        setVideoItem(videoId, {{ uploadStatus: "completed", uploadProgress: 100, uploadMessage: "" }});
+        clearInterval(timer);
+        return;
+      }}
+      if ((record.status === "accepted" || record.status === "uploading") && !started) {{
+        started = true;
+        uploadVideoBinary(videoId, record);
+      }}
+    }} catch (e) {{
+      // 保持轮询，等待手机网络恢复。
+    }}
+  }}, 1000);
+}};
+const uploadRecordedVideo = async (id) => {{
+  const item = findVideoItem(id);
+  if (!item || !item.file || ["pending", "uploading", "completed"].includes(item.uploadStatus)) return;
+  setVideoItem(id, {{ uploadStatus: "pending", uploadProgress: 0, uploadMessage: "等待电脑接收" }});
+  try {{
+    const durations = new Map([[item.file, item.duration]]);
+    const prepared = await prepareUploads([item.file], durations);
+    const record = (prepared.uploads || [])[0];
+    if (!record) throw new Error("上传准备失败");
+    setVideoItem(id, {{ uploadBatchId: prepared.batchId, uploadRecordId: record.id }});
+    pollVideoUpload(id, prepared.batchId, record.id);
+  }} catch (e) {{
+    setVideoItem(id, {{ uploadStatus: "failed", uploadMessage: String(e.message || e) }});
+  }}
+}};
+const deleteVideo = (id) => {{
+  const index = recordedVideos.findIndex((entry) => entry.id === id);
+  if (index < 0) return;
+  if (!confirm("确定删除这个视频吗？")) return;
+  const [item] = recordedVideos.splice(index, 1);
+  URL.revokeObjectURL(item.url);
+  renderVideos();
+}};
 document.getElementById("tab-download").addEventListener("click", () => setTab("download"));
 document.getElementById("tab-upload").addEventListener("click", () => setTab("upload"));
 document.getElementById("tab-content").addEventListener("click", () => {{
   setTab("content");
   refreshContents();
 }});
+document.getElementById("tab-record").addEventListener("click", () => setTab("record"));
 document.getElementById("upload-button").addEventListener("click", submitUpload);
 document.getElementById("content-refresh").addEventListener("click", refreshContents);
 document.getElementById("content-send").addEventListener("click", submitContent);
+document.getElementById("video-add").addEventListener("click", openVideoCapture);
+document.getElementById("video-input").addEventListener("change", async (event) => {{
+  const file = event.target.files && event.target.files[0];
+  if (file) await addVideoFile(file);
+  event.target.value = "";
+}});
 showChromeWarning();
 load();
 </script>
@@ -1839,6 +2190,15 @@ pub fn cmd_clear_share_uploads(
     manager: tauri::State<'_, Arc<ShareManager>>,
 ) -> Result<ShareServerState, String> {
     manager.clear_uploads()
+}
+
+#[tauri::command]
+pub fn cmd_delete_share_upload(
+    manager: tauri::State<'_, Arc<ShareManager>>,
+    id: String,
+    delete_file: bool,
+) -> Result<ShareServerState, String> {
+    manager.delete_upload(id, delete_file)
 }
 
 #[tauri::command]

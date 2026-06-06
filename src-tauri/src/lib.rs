@@ -1107,6 +1107,7 @@ pub fn run() {
             share::cmd_accept_share_upload_batch,
             share::cmd_reject_share_upload_batch,
             share::cmd_clear_share_uploads,
+            share::cmd_delete_share_upload,
             share::cmd_add_share_content,
             share::cmd_remove_share_content,
             share::cmd_clear_share_contents,

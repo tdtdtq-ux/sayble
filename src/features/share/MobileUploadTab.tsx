@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
-import { Check, FileDown, FolderOpen, X } from "lucide-react";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { Check, FileDown, FolderOpen, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ShareUploadRecord } from "@/types/share";
-import { formatFileSize, formatTime, statusLabel, uploadPercent } from "./shareUtils";
+import { formatDuration, formatFileSize, formatTime, statusLabel, uploadPercent } from "./shareUtils";
 
 interface MobileUploadTabProps {
   uploadSaveDir: string;
@@ -17,6 +19,7 @@ interface MobileUploadTabProps {
   running: boolean;
   onChooseUploadDir: () => void | Promise<unknown>;
   onClearUploads: () => void;
+  onDeleteUpload: (upload: ShareUploadRecord) => void | Promise<void>;
   onUploadAction: (command: string, args: Record<string, string>, message: string) => void | Promise<void>;
 }
 
@@ -30,6 +33,7 @@ export function MobileUploadTab({
   running,
   onChooseUploadDir,
   onClearUploads,
+  onDeleteUpload,
   onUploadAction,
 }: MobileUploadTabProps) {
   return (
@@ -115,7 +119,13 @@ export function MobileUploadTab({
             }
           >
             {uploadHistory.map((upload) => (
-              <UploadRow key={upload.id} upload={upload} busy={busy} />
+              <UploadRow
+                key={upload.id}
+                upload={upload}
+                busy={busy}
+                onDelete={() => onDeleteUpload(upload)}
+                showHistoryActions
+              />
             ))}
           </UploadList>
         </TabsContent>
@@ -159,16 +169,30 @@ function UploadRow({
   busy,
   onAccept,
   onReject,
+  onDelete,
+  showHistoryActions = false,
 }: {
   upload: ShareUploadRecord;
   busy: boolean;
   onAccept?: () => void | Promise<void>;
   onReject?: () => void | Promise<void>;
+  onDelete?: () => void | Promise<void>;
+  showHistoryActions?: boolean;
 }) {
   const percent = uploadPercent(upload);
   const failed = upload.status === "failed";
   const rejected = upload.status === "rejected";
   const completed = upload.status === "completed";
+  const durationLabel = formatDuration(upload.durationSeconds);
+
+  const openUploadedFile = async () => {
+    if (!upload.path) return;
+    try {
+      await revealItemInDir(upload.path);
+    } catch (err) {
+      toast.error(`打开文件夹失败: ${err}`);
+    }
+  };
 
   return (
     <div className="rounded-md bg-background px-3 py-2">
@@ -186,6 +210,7 @@ function UploadRow({
           </div>
           <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground/80">
             <span>{formatFileSize(upload.size)}</span>
+            {durationLabel && <span>{durationLabel}</span>}
             <span>{formatTime(upload.completedAt || upload.updatedAt || upload.createdAt)}</span>
             {upload.status === "uploading" && <span>{percent}%</span>}
           </div>
@@ -196,7 +221,7 @@ function UploadRow({
           )}
           {upload.error && <div className="mt-1 text-xs text-destructive">{upload.error}</div>}
         </div>
-        {(onAccept || onReject) && (
+        {(onAccept || onReject || showHistoryActions) && (
           <div className="flex shrink-0 items-center gap-1">
             {onAccept && (
               <Button variant="ghost" size="icon-xs" disabled={busy} title="接收" onClick={() => void onAccept()}>
@@ -207,6 +232,24 @@ function UploadRow({
               <Button variant="ghost" size="icon-xs" disabled={busy} title="拒绝" onClick={() => void onReject()}>
                 <X />
               </Button>
+            )}
+            {showHistoryActions && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  disabled={busy || !upload.path}
+                  title={upload.path ? "打开文件夹" : "没有可打开的文件"}
+                  onClick={() => void openUploadedFile()}
+                >
+                  <FolderOpen />
+                </Button>
+                {onDelete && (
+                  <Button variant="ghost" size="icon-xs" disabled={busy} title="删除记录" onClick={() => void onDelete()}>
+                    <Trash2 />
+                  </Button>
+                )}
+              </>
             )}
           </div>
         )}
