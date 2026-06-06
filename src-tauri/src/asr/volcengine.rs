@@ -1,8 +1,8 @@
+use super::AsrEvent;
 use crate::asr::protocol::{
     build_audio_request, build_full_client_request, parse_server_response, AsrRequest,
 };
 use crate::config::{AsrConfig, ASR_RESOURCE_ID};
-use super::AsrEvent;
 use futures_util::{SinkExt, StreamExt};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -61,11 +61,7 @@ impl VolcEngineAsr {
         ),
         String,
     > {
-        let config = self
-            .config
-            .lock()
-            .map_err(|e| e.to_string())?
-            .clone();
+        let config = self.config.lock().map_err(|e| e.to_string())?.clone();
 
         Self::validate_config(&config)?;
 
@@ -102,15 +98,15 @@ impl VolcEngineAsr {
     }
 
     pub fn is_running(&self) -> bool {
-        self.is_running
-            .lock()
-            .map(|r| *r)
-            .unwrap_or(false)
+        self.is_running.lock().map(|r| *r).unwrap_or(false)
     }
 }
 
 /// 构建 WebSocket 握手请求
-fn build_ws_request(config: &AsrConfig, connect_id: &str) -> Result<tungstenite::http::Request<()>, String> {
+fn build_ws_request(
+    config: &AsrConfig,
+    connect_id: &str,
+) -> Result<tungstenite::http::Request<()>, String> {
     let url = url::Url::parse(ASR_WSS_URL).map_err(|e| format!("URL parse error: {}", e))?;
     tungstenite::http::Request::builder()
         .uri(ASR_WSS_URL)
@@ -202,13 +198,11 @@ pub async fn run_asr_session(
     let connect_id = uuid::Uuid::new_v4().to_string();
     let request = build_ws_request(&config, &connect_id)?;
 
-    let (ws_stream, _) = tokio::time::timeout(
-        std::time::Duration::from_secs(10),
-        connect_async(request),
-    )
-    .await
-    .map_err(|_| "WebSocket connect timeout (10s)".to_string())?
-    .map_err(|e| format!("WebSocket connect error: {}", e))?;
+    let (ws_stream, _) =
+        tokio::time::timeout(std::time::Duration::from_secs(10), connect_async(request))
+            .await
+            .map_err(|_| "WebSocket connect timeout (10s)".to_string())?
+            .map_err(|e| format!("WebSocket connect error: {}", e))?;
 
     let _ = event_tx.send(AsrEvent::Connected);
     log::info!("[asr] WebSocket connected, connect_id={}", connect_id);
@@ -234,43 +228,43 @@ pub async fn run_asr_session(
     let mut recv_task = tokio::spawn(async move {
         while *is_running_recv.lock().unwrap_or_else(|e| e.into_inner()) {
             match read.next().await {
-                Some(Ok(Message::Binary(data))) => {
-                    match parse_server_response(&data) {
-                        Ok((header, Some(response))) => {
-                            if header.is_server_error() {
-                                let msg = response
-                                    .message
-                                    .unwrap_or_else(|| "Unknown error".to_string());
-                                let _ = event_tx_recv.send(AsrEvent::Error(msg));
-                                break;
-                            }
+                Some(Ok(Message::Binary(data))) => match parse_server_response(&data) {
+                    Ok((header, Some(response))) => {
+                        if header.is_server_error() {
+                            let msg = response
+                                .message
+                                .unwrap_or_else(|| "Unknown error".to_string());
+                            let _ = event_tx_recv.send(AsrEvent::Error(msg));
+                            break;
+                        }
 
-                            if let Some(result) = &response.result {
-                                if let Some(text) = &result.text {
-                                    if !text.is_empty() {
-                                        if header.is_last_package() {
-                                            let duration_ms = response.audio_info.as_ref()
-                                                .and_then(|info| info.duration);
-                                            let _ = event_tx_recv
-                                                .send(AsrEvent::FinalResult(text.clone(), duration_ms));
-                                        } else {
-                                            let _ = event_tx_recv
-                                                .send(AsrEvent::PartialResult(text.clone()));
-                                        }
+                        if let Some(result) = &response.result {
+                            if let Some(text) = &result.text {
+                                if !text.is_empty() {
+                                    if header.is_last_package() {
+                                        let duration_ms = response
+                                            .audio_info
+                                            .as_ref()
+                                            .and_then(|info| info.duration);
+                                        let _ = event_tx_recv
+                                            .send(AsrEvent::FinalResult(text.clone(), duration_ms));
+                                    } else {
+                                        let _ = event_tx_recv
+                                            .send(AsrEvent::PartialResult(text.clone()));
                                     }
                                 }
                             }
                         }
-                        Ok((header, None)) => {
-                            if header.is_server_ack() {
-                                log::debug!("[asr] server ACK received");
-                            }
-                        }
-                        Err(e) => {
-                            log::error!("[asr] parse response error: {}", e);
+                    }
+                    Ok((header, None)) => {
+                        if header.is_server_ack() {
+                            log::debug!("[asr] server ACK received");
                         }
                     }
-                }
+                    Err(e) => {
+                        log::error!("[asr] parse response error: {}", e);
+                    }
+                },
                 Some(Ok(Message::Close(frame))) => {
                     let reason = frame
                         .as_ref()
@@ -300,10 +294,7 @@ pub async fn run_asr_session(
         match audio_rx.recv().await {
             Some(samples) => {
                 // i16 samples → bytes (little endian)
-                let bytes: Vec<u8> = samples
-                    .iter()
-                    .flat_map(|s| s.to_le_bytes())
-                    .collect();
+                let bytes: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
 
                 let frame = build_audio_request(&bytes, false)?;
                 match tokio::time::timeout(

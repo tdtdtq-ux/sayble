@@ -18,21 +18,18 @@ impl SimulateOutput {
         let char_count = text.chars().count();
         log::info!("[output] simulate keyboard start, chars={}", char_count);
 
-        let mut enigo = Enigo::new(&Settings::default())
-            .map_err(|e| {
-                log::error!("[output] failed to create Enigo: {}", e);
-                format!("Failed to create Enigo: {}", e)
-            })?;
+        let mut enigo = Enigo::new(&Settings::default()).map_err(|e| {
+            log::error!("[output] failed to create Enigo: {}", e);
+            format!("Failed to create Enigo: {}", e)
+        })?;
 
         // 短暂延迟让目标窗口获取焦点
         std::thread::sleep(std::time::Duration::from_millis(50));
 
-        enigo
-            .text(text)
-            .map_err(|e| {
-                log::error!("[output] failed to type text: {}", e);
-                format!("Failed to type text: {}", e)
-            })?;
+        enigo.text(text).map_err(|e| {
+            log::error!("[output] failed to type text: {}", e);
+            format!("Failed to type text: {}", e)
+        })?;
 
         log::info!("[output] simulate keyboard done, chars_sent={}", char_count);
         Ok(SimulateResult {

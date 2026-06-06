@@ -12,6 +12,8 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 #[cfg(windows)]
 use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
 #[cfg(windows)]
+use windows::Win32::System::Threading::GetThreadId;
+#[cfg(windows)]
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetAsyncKeyState, VK_LCONTROL, VK_LMENU, VK_LSHIFT, VK_RCONTROL, VK_RMENU, VK_RSHIFT,
 };
@@ -21,8 +23,6 @@ use windows::Win32::UI::WindowsAndMessaging::{
     UnhookWindowsHookEx, KBDLLHOOKSTRUCT, MSG, WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_QUIT,
     WM_SYSKEYDOWN, WM_SYSKEYUP,
 };
-#[cfg(windows)]
-use windows::Win32::System::Threading::GetThreadId;
 
 /// 快捷键事件
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,7 +85,6 @@ impl Default for KeyState {
         }
     }
 }
-
 
 impl KeyState {
     fn modifier_from_vk(vk: u32) -> Option<Modifier> {
@@ -303,14 +302,19 @@ impl HotkeyManager {
                 // 清理 AtomicPtr 中的数据
                 let old_ptr = GLOBAL_HOOK_DATA.swap(std::ptr::null_mut(), Ordering::SeqCst);
                 if !old_ptr.is_null() {
-                    unsafe { drop(Box::from_raw(old_ptr)); }
+                    unsafe {
+                        drop(Box::from_raw(old_ptr));
+                    }
                 }
             });
 
             // 状态处理线程
             let mut key_state = KeyState::default();
 
-            log::info!("[hotkey] state processing loop started, configs count: {}", configs.lock().map(|c| c.len()).unwrap_or(0));
+            log::info!(
+                "[hotkey] state processing loop started, configs count: {}",
+                configs.lock().map(|c| c.len()).unwrap_or(0)
+            );
 
             while *running.lock().unwrap_or_else(|e| e.into_inner()) {
                 match raw_rx.recv_timeout(std::time::Duration::from_millis(100)) {
@@ -437,19 +441,12 @@ impl HotkeyManager {
     }
 
     pub fn is_running(&self) -> bool {
-        self.running
-            .lock()
-            .map(|r| *r)
-            .unwrap_or(false)
+        self.running.lock().map(|r| *r).unwrap_or(false)
     }
 }
 
 #[cfg(windows)]
-unsafe extern "system" fn keyboard_hook_proc(
-    code: i32,
-    wparam: WPARAM,
-    lparam: LPARAM,
-) -> LRESULT {
+unsafe extern "system" fn keyboard_hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if code >= 0 {
         let kb_struct = unsafe { &*(lparam.0 as *const KBDLLHOOKSTRUCT) };
         let vk = kb_struct.vkCode;
@@ -545,9 +542,10 @@ mod tests {
         let mut state = KeyState::default();
         let ctrl = VK_LCONTROL.0 as u32;
         state.pressed_modifiers.insert(ctrl);
-        state
-            .modifier_press_times
-            .insert(ctrl, Instant::now() - std::time::Duration::from_secs(KEY_EXPIRE_SECS + 1));
+        state.modifier_press_times.insert(
+            ctrl,
+            Instant::now() - std::time::Duration::from_secs(KEY_EXPIRE_SECS + 1),
+        );
 
         state.expire_stale_keys();
 

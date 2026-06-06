@@ -6,6 +6,8 @@ pub struct TunnelConfig {
     pub id: String,
     pub name: String,
     pub ssh_host: String,
+    #[serde(default)]
+    pub direction: TunnelDirection,
     pub local_host: String,
     pub local_port: u16,
     pub remote_host: String,
@@ -17,6 +19,19 @@ pub struct TunnelConfig {
     pub server_alive_interval: u64,
     pub server_alive_count_max: u64,
     pub exit_on_forward_failure: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum TunnelDirection {
+    Local,
+    Remote,
+}
+
+impl Default for TunnelDirection {
+    fn default() -> Self {
+        Self::Local
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -71,4 +86,33 @@ pub struct TunnelLogEntry {
     pub level: TunnelLogLevel,
     pub message: String,
     pub timestamp: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{TunnelConfig, TunnelDirection};
+
+    #[test]
+    fn tunnel_direction_defaults_to_local_for_existing_configs() {
+        let json = r#"{
+            "id": "demo",
+            "name": "Demo",
+            "sshHost": "prod2",
+            "localHost": "127.0.0.1",
+            "localPort": 15900,
+            "remoteHost": "127.0.0.1",
+            "remotePort": 15900,
+            "autoStart": false,
+            "autoReconnect": true,
+            "compression": false,
+            "tcpKeepAlive": true,
+            "serverAliveInterval": 60,
+            "serverAliveCountMax": 3,
+            "exitOnForwardFailure": true
+        }"#;
+
+        let config: TunnelConfig = serde_json::from_str(json).unwrap();
+
+        assert_eq!(config.direction, TunnelDirection::Local);
+    }
 }

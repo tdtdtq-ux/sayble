@@ -51,8 +51,14 @@ impl JsonStore {
         let tmp_path = self.path.with_extension("json.tmp");
         fs::write(&tmp_path, &json)
             .map_err(|e| format!("Failed to write {}: {}", tmp_path.display(), e))?;
-        fs::rename(&tmp_path, &self.path)
-            .map_err(|e| format!("Failed to rename {} -> {}: {}", tmp_path.display(), self.path.display(), e))?;
+        fs::rename(&tmp_path, &self.path).map_err(|e| {
+            format!(
+                "Failed to rename {} -> {}: {}",
+                tmp_path.display(),
+                self.path.display(),
+                e
+            )
+        })?;
         Ok(())
     }
 }
@@ -95,10 +101,16 @@ impl AppStore {
     /// 累加一次识别的统计数据并持久化
     pub fn accumulate_stats(&self, chars: usize, duration_ms: Option<i64>) {
         let s = self.stats();
-        let prev_dur: i64 = s.get("total_duration_ms").and_then(|v| v.as_i64()).unwrap_or(0);
+        let prev_dur: i64 = s
+            .get("total_duration_ms")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
         let prev_chars: i64 = s.get("total_chars").and_then(|v| v.as_i64()).unwrap_or(0);
         let count: i64 = s.get("total_count").and_then(|v| v.as_i64()).unwrap_or(0);
-        s.set("total_duration_ms", serde_json::json!(prev_dur + duration_ms.unwrap_or(0)));
+        s.set(
+            "total_duration_ms",
+            serde_json::json!(prev_dur + duration_ms.unwrap_or(0)),
+        );
         s.set("total_chars", serde_json::json!(prev_chars + chars as i64));
         s.set("total_count", serde_json::json!(count + 1));
         if let Err(e) = s.save() {
@@ -109,7 +121,8 @@ impl AppStore {
     /// 追加一条历史记录，超过 MAX_HISTORY_RECORDS 时删除最旧的
     pub fn append_history(&self, record: Value) {
         let h = &self.history;
-        let mut records = h.get("records")
+        let mut records = h
+            .get("records")
             .and_then(|v| v.as_array().cloned())
             .unwrap_or_default();
         records.push(record);
@@ -124,7 +137,9 @@ impl AppStore {
 
     /// 读取历史记录，倒序返回（最新在前）
     pub fn load_history(&self) -> Vec<Value> {
-        let mut records = self.history.get("records")
+        let mut records = self
+            .history
+            .get("records")
             .and_then(|v| v.as_array().cloned())
             .unwrap_or_default();
         records.reverse();
@@ -134,7 +149,8 @@ impl AppStore {
     /// 删除一条历史记录（按 timestamp 匹配）
     pub fn remove_history(&self, timestamp: &str) {
         let h = &self.history;
-        let mut records = h.get("records")
+        let mut records = h
+            .get("records")
             .and_then(|v| v.as_array().cloned())
             .unwrap_or_default();
         records.retain(|r| r.get("timestamp").and_then(|t| t.as_str()) != Some(timestamp));

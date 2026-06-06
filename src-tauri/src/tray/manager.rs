@@ -1,12 +1,12 @@
 use crate::config::AppState;
 use crate::tunnel::TunnelManager;
+use std::sync::{Arc, Mutex};
 use tauri::{
     image::Image,
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager,
 };
-use std::sync::{Arc, Mutex};
 
 pub struct TrayManager {
     state: Arc<Mutex<AppState>>,
@@ -24,45 +24,20 @@ impl TrayManager {
     }
 
     pub fn setup(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-        let settings_item = MenuItemBuilder::with_id("settings", "设置").build(app)?;
-        let about_item = MenuItemBuilder::with_id("about", "关于").build(app)?;
         let quit_item = MenuItemBuilder::with_id("quit", "退出").build(app)?;
-
-        let menu = MenuBuilder::new(app)
-            .item(&settings_item)
-            .item(&about_item)
-            .separator()
-            .item(&quit_item)
-            .build()?;
+        let menu = MenuBuilder::new(app).item(&quit_item).build()?;
 
         let _tray = TrayIconBuilder::new()
             .icon(Image::from_bytes(include_bytes!("../../icons/32x32.png"))?)
             .tooltip("Sayble - 空闲")
             .menu(&menu)
+            .show_menu_on_left_click(false)
             .on_menu_event(move |app, event| {
-                match event.id().as_ref() {
-                    "settings" => {
-                        // 打开设置窗口
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
+                if event.id().as_ref() == "quit" {
+                    if let Some(manager) = app.try_state::<Arc<TunnelManager>>() {
+                        manager.stop_all();
                     }
-                    "about" => {
-                        log::info!("[tray] about clicked");
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
-                        let _ = app.emit("show-about", ());
-                    }
-                    "quit" => {
-                        if let Some(manager) = app.try_state::<Arc<TunnelManager>>() {
-                            manager.stop_all();
-                        }
-                        app.exit(0);
-                    }
-                    _ => {}
+                    app.exit(0);
                 }
             })
             .on_tray_icon_event(|tray, event| {
@@ -73,7 +48,9 @@ impl TrayManager {
                 } = event
                 {
                     let app = tray.app_handle();
-                    let _ = app.emit("tray-toggle-recording", ());
+                    log::info!("[tray] left click: show home");
+                    show_main_window(app);
+                    let _ = app.emit("show-home", ());
                 }
             })
             .build(app)?;
@@ -99,6 +76,23 @@ impl TrayManager {
 
     pub fn get_state(&self) -> AppState {
         self.state.lock().map(|s| *s).unwrap_or(AppState::Idle)
+    }
+}
+
+fn show_main_window(app: &AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        log::warn!("[tray] main window not found");
+        return;
+    };
+
+    if let Err(e) = window.show() {
+        log::error!("[tray] failed to show main window: {}", e);
+    }
+    if let Err(e) = window.unminimize() {
+        log::warn!("[tray] failed to unminimize main window: {}", e);
+    }
+    if let Err(e) = window.set_focus() {
+        log::warn!("[tray] failed to focus main window: {}", e);
     }
 }
 

@@ -70,7 +70,10 @@ impl TunnelManager {
     }
 
     pub fn list_tunnels(&self) -> Vec<TunnelConfig> {
-        self.configs.lock().unwrap_or_else(|e| e.into_inner()).clone()
+        self.configs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     pub fn save_tunnel(&self, mut config: TunnelConfig) -> Result<TunnelConfig, String> {
@@ -96,15 +99,21 @@ impl TunnelManager {
         configs.retain(|item| item.id != id);
         write_json(&self.config_path, &*configs)?;
 
-        self.statuses.lock().unwrap_or_else(|e| e.into_inner()).remove(id);
+        self.statuses
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(id);
 
         if let Some(config) = config {
             self.append_log(&config.id, &config.name, TunnelLogLevel::Info, "配置已删除");
         }
-        let _ = self.app.emit("tunnel-event", serde_json::json!({
-            "kind": "deleted",
-            "tunnelId": id,
-        }));
+        let _ = self.app.emit(
+            "tunnel-event",
+            serde_json::json!({
+                "kind": "deleted",
+                "tunnelId": id,
+            }),
+        );
         Ok(())
     }
 
@@ -118,7 +127,11 @@ impl TunnelManager {
             .unwrap_or_else(|e| e.into_inner())
             .remove(id);
 
-        let child = self.children.lock().unwrap_or_else(|e| e.into_inner()).remove(id);
+        let child = self
+            .children
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(id);
 
         if let Some(child) = child {
             let mut child = child.lock().unwrap_or_else(|e| e.into_inner());
@@ -129,7 +142,10 @@ impl TunnelManager {
         }
 
         let config = self.get_config(id);
-        let name = config.as_ref().map(|c| c.name.as_str()).unwrap_or("SSH 隧道");
+        let name = config
+            .as_ref()
+            .map(|c| c.name.as_str())
+            .unwrap_or("SSH 隧道");
         self.set_status(TunnelStatus::stopped(id));
         self.append_log(id, name, TunnelLogLevel::Info, "已停止");
         Ok(())
@@ -142,7 +158,10 @@ impl TunnelManager {
     }
 
     pub fn stop_all(&self) {
-        self.desired_running.lock().unwrap_or_else(|e| e.into_inner()).clear();
+        self.desired_running
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
         let children: Vec<(String, ChildHandle)> = self
             .children
             .lock()
@@ -196,15 +215,20 @@ impl TunnelManager {
             logs.clear();
         }
         write_json(&self.log_path, &logs)?;
-        let _ = self.app.emit("tunnel-event", serde_json::json!({
-            "kind": "logsCleared",
-            "tunnelId": tunnel_id,
-        }));
+        let _ = self.app.emit(
+            "tunnel-event",
+            serde_json::json!({
+                "kind": "logsCleared",
+                "tunnelId": tunnel_id,
+            }),
+        );
         Ok(())
     }
 
     fn start_tunnel_inner(self: &Arc<Self>, id: &str, reconnecting: bool) -> Result<(), String> {
-        let config = self.get_config(id).ok_or_else(|| "隧道配置不存在".to_string())?;
+        let config = self
+            .get_config(id)
+            .ok_or_else(|| "隧道配置不存在".to_string())?;
         validate_config(&config)?;
 
         let mut children = self.children.lock().unwrap_or_else(|e| e.into_inner());
@@ -340,7 +364,11 @@ impl TunnelManager {
                                 &config.id,
                                 &config.name,
                                 TunnelLogLevel::Success,
-                                if reconnecting { "重连成功" } else { "隧道已连接" },
+                                if reconnecting {
+                                    "重连成功"
+                                } else {
+                                    "隧道已连接"
+                                },
                             );
                             if reconnecting {
                                 manager.notify(
@@ -356,7 +384,10 @@ impl TunnelManager {
                             break;
                         }
                         manager
-                            .handle_process_exit(config.clone(), format!("读取 SSH 状态失败: {}", e))
+                            .handle_process_exit(
+                                config.clone(),
+                                format!("读取 SSH 状态失败: {}", e),
+                            )
                             .await;
                         break;
                     }
@@ -501,11 +532,14 @@ impl TunnelManager {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .insert(status.id.clone(), status.clone());
-        let _ = self.app.emit("tunnel-event", serde_json::json!({
-            "kind": "status",
-            "tunnelId": status.id,
-            "status": status,
-        }));
+        let _ = self.app.emit(
+            "tunnel-event",
+            serde_json::json!({
+                "kind": "status",
+                "tunnelId": status.id,
+                "status": status,
+            }),
+        );
     }
 
     fn append_log(
@@ -529,7 +563,9 @@ impl TunnelManager {
                 log::info!("[tunnel] {}: {}", entry.tunnel_name, entry.message)
             }
             TunnelLogLevel::Warn => log::warn!("[tunnel] {}: {}", entry.tunnel_name, entry.message),
-            TunnelLogLevel::Error => log::error!("[tunnel] {}: {}", entry.tunnel_name, entry.message),
+            TunnelLogLevel::Error => {
+                log::error!("[tunnel] {}: {}", entry.tunnel_name, entry.message)
+            }
         }
 
         let save_result = (|| -> Result<(), String> {
@@ -547,19 +583,25 @@ impl TunnelManager {
             log::error!("[tunnel] failed to save log: {}", e);
         }
 
-        let _ = self.app.emit("tunnel-event", serde_json::json!({
-            "kind": "log",
-            "tunnelId": entry.tunnel_id,
-            "log": entry,
-        }));
+        let _ = self.app.emit(
+            "tunnel-event",
+            serde_json::json!({
+                "kind": "log",
+                "tunnelId": entry.tunnel_id,
+                "log": entry,
+            }),
+        );
     }
 
     fn notify(&self, title: &str, body: &str, level: &str) {
-        let _ = self.app.emit("tunnel-notification", serde_json::json!({
-            "title": title,
-            "body": body,
-            "level": level,
-        }));
+        let _ = self.app.emit(
+            "tunnel-notification",
+            serde_json::json!({
+                "title": title,
+                "body": body,
+                "level": level,
+            }),
+        );
 
         if let Err(e) = self
             .app
@@ -632,7 +674,8 @@ fn read_logs(path: &PathBuf) -> Result<Vec<TunnelLogEntry>, String> {
 }
 
 fn write_json<T: serde::Serialize>(path: &PathBuf, value: &T) -> Result<(), String> {
-    let json = serde_json::to_string_pretty(value).map_err(|e| format!("序列化隧道数据失败: {}", e))?;
+    let json =
+        serde_json::to_string_pretty(value).map_err(|e| format!("序列化隧道数据失败: {}", e))?;
     let tmp_path = path.with_extension("json.tmp");
     fs::write(&tmp_path, json).map_err(|e| format!("写入 {} 失败: {}", tmp_path.display(), e))?;
     fs::rename(&tmp_path, path).map_err(|e| format!("保存 {} 失败: {}", path.display(), e))?;

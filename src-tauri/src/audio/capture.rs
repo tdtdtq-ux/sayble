@@ -122,10 +122,8 @@ impl AudioCapture {
                     .build_input_stream(
                         &config,
                         move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                            let converted: Vec<i16> = data
-                                .iter()
-                                .map(|&s| (s * i16::MAX as f32) as i16)
-                                .collect();
+                            let converted: Vec<i16> =
+                                data.iter().map(|&s| (s * i16::MAX as f32) as i16).collect();
                             let _ = data_tx.send(converted);
                         },
                         move |err| {
@@ -144,13 +142,21 @@ impl AudioCapture {
             .play()
             .map_err(|e| format!("Failed to start audio stream: {}", e))?;
 
-        log::info!("[audio] capture started, device_rate={}, channels={}, format={:?}, target_rate={}",
-            device_sample_rate, device_channels, sample_format, TARGET_SAMPLE_RATE);
+        log::info!(
+            "[audio] capture started, device_rate={}, channels={}, format={:?}, target_rate={}",
+            device_sample_rate,
+            device_channels,
+            sample_format,
+            TARGET_SAMPLE_RATE
+        );
 
         // 重采样线程：将设备采样率/通道数转换为 16kHz 单声道
         let is_capturing_resample = self.is_capturing.clone();
         std::thread::spawn(move || {
-            while *is_capturing_resample.lock().unwrap_or_else(|e| e.into_inner()) {
+            while *is_capturing_resample
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+            {
                 match data_rx.recv_timeout(std::time::Duration::from_millis(100)) {
                     Ok(samples) => {
                         let mono = if device_channels > 1 {
@@ -193,10 +199,7 @@ impl AudioCapture {
 
     /// 是否正在采集
     pub fn is_capturing(&self) -> bool {
-        self.is_capturing
-            .lock()
-            .map(|c| *c)
-            .unwrap_or(false)
+        self.is_capturing.lock().map(|c| *c).unwrap_or(false)
     }
 }
 

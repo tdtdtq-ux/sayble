@@ -9,8 +9,8 @@ pub mod store;
 pub mod tray;
 pub mod tunnel;
 
-use asr::AsrEvent;
 use asr::volcengine::VolcEngineAsr;
+use asr::AsrEvent;
 use audio::AudioCapture;
 use config::{AppConfig, AsrConfig, HotkeyBinding, HotkeyConfig, OutputMode};
 use hotkey::HotkeyManager;
@@ -20,7 +20,10 @@ use store::AppStore;
 use tray::TrayManager;
 use tunnel::TunnelManager;
 
-use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 use tauri::{Emitter, Manager};
 use tauri_plugin_autostart::ManagerExt;
 
@@ -30,6 +33,7 @@ const FLOATING_WINDOW_BOTTOM_GAP: f64 = 16.0;
 const RECORDING_SILENCE_AUTO_STOP_SECS: u64 = 30;
 const RECORDING_MAX_DURATION_SECS: u64 = 120;
 const SILENCE_RMS_THRESHOLD: f64 = 450.0;
+const AUTOSTART_ARG: &str = "--autostart";
 
 #[derive(Clone, Copy, Debug)]
 struct WindowFrame {
@@ -207,12 +211,41 @@ fn show_floating_window(app: &tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+fn has_autostart_arg<I, S>(args: I) -> bool
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    args.into_iter().any(|arg| arg.as_ref() == AUTOSTART_ARG)
+}
+
+fn is_autostart_launch() -> bool {
+    has_autostart_arg(std::env::args())
+}
+
+fn show_main_window(app: &tauri::AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        log::warn!("[app] main window not found");
+        return;
+    };
+
+    if let Err(e) = window.show() {
+        log::error!("[app] failed to show main window: {}", e);
+    }
+    if let Err(e) = window.unminimize() {
+        log::warn!("[app] failed to unminimize main window: {}", e);
+    }
+    if let Err(e) = window.set_focus() {
+        log::warn!("[app] failed to focus main window: {}", e);
+    }
+}
+
 /// 检查自启动注册表项是否被第三方软件（如 QQ、360 等）禁用
 /// 返回禁用该项的子键名称（如 "QQDisabled"），未被禁用则返回 None
 #[cfg(target_os = "windows")]
 fn check_autostart_hijacked() -> Option<String> {
-    use windows::Win32::System::Registry::*;
     use windows::core::*;
+    use windows::Win32::System::Registry::*;
 
     // 常见的第三方软件禁用自启动时使用的子键名
     let disabled_subkeys = [
@@ -229,34 +262,24 @@ fn check_autostart_hijacked() -> Option<String> {
             "Software\\Microsoft\\Windows\\CurrentVersion\\Run\\{}",
             subkey_name
         );
-        let wide: Vec<u16> = subkey_path.encode_utf16().chain(std::iter::once(0)).collect();
+        let wide: Vec<u16> = subkey_path
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
         let subkey_pcwstr = PCWSTR(wide.as_ptr());
 
         let mut hkey = HKEY::default();
-        let result = unsafe {
-            RegOpenKeyExW(
-                HKEY_CURRENT_USER,
-                subkey_pcwstr,
-                0,
-                KEY_READ,
-                &mut hkey,
-            )
-        };
+        let result =
+            unsafe { RegOpenKeyExW(HKEY_CURRENT_USER, subkey_pcwstr, 0, KEY_READ, &mut hkey) };
 
         if result.is_ok() {
             // 子键存在，检查是否有 Sayble 值
             let value_name = w!("Sayble");
-            let query_result = unsafe {
-                RegQueryValueExW(
-                    hkey,
-                    value_name,
-                    None,
-                    None,
-                    None,
-                    None,
-                )
-            };
-            unsafe { let _ = RegCloseKey(hkey); }
+            let query_result =
+                unsafe { RegQueryValueExW(hkey, value_name, None, None, None, None) };
+            unsafe {
+                let _ = RegCloseKey(hkey);
+            }
 
             if query_result.is_ok() {
                 log::warn!(
@@ -270,9 +293,8 @@ fn check_autostart_hijacked() -> Option<String> {
 
     // 兜底：检查 Run 下所有子键是否包含 Sayble（应对未知软件）
     let mut run_hkey = HKEY::default();
-    let open_result = unsafe {
-        RegOpenKeyExW(HKEY_CURRENT_USER, run_path, 0, KEY_READ, &mut run_hkey)
-    };
+    let open_result =
+        unsafe { RegOpenKeyExW(HKEY_CURRENT_USER, run_path, 0, KEY_READ, &mut run_hkey) };
     if open_result.is_ok() {
         let mut index = 0u32;
         loop {
@@ -305,30 +327,43 @@ fn check_autostart_hijacked() -> Option<String> {
                 "Software\\Microsoft\\Windows\\CurrentVersion\\Run\\{}",
                 child_name
             );
-            let wide2: Vec<u16> = child_path.encode_utf16().chain(std::iter::once(0)).collect();
+            let wide2: Vec<u16> = child_path
+                .encode_utf16()
+                .chain(std::iter::once(0))
+                .collect();
             let child_pcwstr = PCWSTR(wide2.as_ptr());
             let mut child_hkey = HKEY::default();
             let child_open = unsafe {
-                RegOpenKeyExW(HKEY_CURRENT_USER, child_pcwstr, 0, KEY_READ, &mut child_hkey)
+                RegOpenKeyExW(
+                    HKEY_CURRENT_USER,
+                    child_pcwstr,
+                    0,
+                    KEY_READ,
+                    &mut child_hkey,
+                )
             };
             if child_open.is_ok() {
                 let value_name = w!("Sayble");
-                let q = unsafe {
-                    RegQueryValueExW(child_hkey, value_name, None, None, None, None)
-                };
-                unsafe { let _ = RegCloseKey(child_hkey); }
+                let q = unsafe { RegQueryValueExW(child_hkey, value_name, None, None, None, None) };
+                unsafe {
+                    let _ = RegCloseKey(child_hkey);
+                }
                 if q.is_ok() {
                     log::warn!(
                         "[autostart] Sayble found in Run\\{} — autostart was hijacked by unknown software",
                         child_name
                     );
-                    unsafe { let _ = RegCloseKey(run_hkey); }
+                    unsafe {
+                        let _ = RegCloseKey(run_hkey);
+                    }
                     return Some(child_name);
                 }
             }
             index += 1;
         }
-        unsafe { let _ = RegCloseKey(run_hkey); }
+        unsafe {
+            let _ = RegCloseKey(run_hkey);
+        }
     }
 
     None
@@ -337,8 +372,8 @@ fn check_autostart_hijacked() -> Option<String> {
 /// 读取 Windows MachineGuid 作为设备唯一标识
 #[cfg(target_os = "windows")]
 fn get_machine_guid() -> Option<String> {
-    use windows::Win32::System::Registry::*;
     use windows::core::*;
+    use windows::Win32::System::Registry::*;
 
     let path: Vec<u16> = "SOFTWARE\\Microsoft\\Cryptography"
         .encode_utf16()
@@ -361,11 +396,12 @@ fn get_machine_guid() -> Option<String> {
 
     let value_name = w!("MachineGuid");
     let mut buf_size: u32 = 0;
-    let query = unsafe {
-        RegQueryValueExW(hkey, value_name, None, None, None, Some(&mut buf_size))
-    };
+    let query =
+        unsafe { RegQueryValueExW(hkey, value_name, None, None, None, Some(&mut buf_size)) };
     if query.is_err() || buf_size == 0 {
-        unsafe { let _ = RegCloseKey(hkey); }
+        unsafe {
+            let _ = RegCloseKey(hkey);
+        }
         log::warn!("[app] MachineGuid value not found or empty");
         return None;
     }
@@ -381,7 +417,9 @@ fn get_machine_guid() -> Option<String> {
             Some(&mut buf_size),
         )
     };
-    unsafe { let _ = RegCloseKey(hkey); }
+    unsafe {
+        let _ = RegCloseKey(hkey);
+    }
 
     if query2.is_err() {
         log::warn!("[app] failed to read MachineGuid value");
@@ -415,7 +453,10 @@ struct RecordingFlag {
 
 /// 录音配置枚举，区分不同 ASR 引擎
 enum RecordingConfig {
-    Volcengine { asr_config: AsrConfig, device_name: String },
+    Volcengine {
+        asr_config: AsrConfig,
+        device_name: String,
+    },
     #[cfg(target_os = "windows")]
     Sapi,
 }
@@ -459,10 +500,12 @@ fn recording_auto_stop_reason(
 fn parse_hotkey_configs(toggle_label: &str) -> Vec<HotkeyConfig> {
     let mut configs = Vec::new();
     if let Some(binding) = HotkeyBinding::parse_from_label(toggle_label) {
-        log::info!("[hotkey] parsed toggle binding: {:?} from \"{}\"", binding, toggle_label);
-        configs.push(HotkeyConfig {
+        log::info!(
+            "[hotkey] parsed toggle binding: {:?} from \"{}\"",
             binding,
-        });
+            toggle_label
+        );
+        configs.push(HotkeyConfig { binding });
     }
     configs
 }
@@ -472,7 +515,8 @@ fn output_text_from_store(app: &tauri::AppHandle, text: &str) {
     let store = app.state::<AppStore>();
     let settings = store.settings().get("app_settings");
 
-    let auto_output = settings.as_ref()
+    let auto_output = settings
+        .as_ref()
         .and_then(|s| s.get("autoOutput"))
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
@@ -482,7 +526,8 @@ fn output_text_from_store(app: &tauri::AppHandle, text: &str) {
         return;
     }
 
-    let output_mode_str = settings.as_ref()
+    let output_mode_str = settings
+        .as_ref()
         .and_then(|s| s.get("outputMode"))
         .and_then(|v| v.as_str())
         .unwrap_or("Clipboard");
@@ -492,7 +537,11 @@ fn output_text_from_store(app: &tauri::AppHandle, text: &str) {
         _ => OutputMode::Clipboard,
     };
 
-    log::info!("[output] output_text_from_store, mode={:?}, text_len={}", mode, text.len());
+    log::info!(
+        "[output] output_text_from_store, mode={:?}, text_len={}",
+        mode,
+        text.len()
+    );
     let result = match mode {
         OutputMode::Clipboard => ClipboardOutput::paste(text),
         OutputMode::SimulateKeyboard => SimulateOutput::type_text(text).map(|_| ()),
@@ -507,10 +556,13 @@ fn load_recording_settings_from_store(app: &tauri::AppHandle) -> Result<Recordin
     let store = app.state::<AppStore>();
 
     // 从 asr_settings 读取 ASR 配置
-    let asr_settings = store.settings().get("asr_settings")
+    let asr_settings = store
+        .settings()
+        .get("asr_settings")
         .ok_or("No asr_settings found in store")?;
 
-    let selected_provider = asr_settings.get("selectedProvider")
+    let selected_provider = asr_settings
+        .get("selectedProvider")
         .and_then(|v| v.as_str())
         .unwrap_or("volcengine");
 
@@ -522,32 +574,42 @@ fn load_recording_settings_from_store(app: &tauri::AppHandle) -> Result<Recordin
 
     // 从 app_settings 读取麦克风设备
     let app_settings = store.settings().get("app_settings");
-    let device_name = app_settings.as_ref()
+    let device_name = app_settings
+        .as_ref()
         .and_then(|s| s.get("microphoneDevice"))
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
 
-    let providers = asr_settings.get("providers")
-        .and_then(|v| v.as_object());
+    let providers = asr_settings.get("providers").and_then(|v| v.as_object());
 
     let credentials = providers
         .and_then(|p| p.get(selected_provider))
         .and_then(|v| v.as_object())
         .ok_or("未找到所选 ASR 服务商的配置")?;
 
-    let language = credentials.get("language")
+    let language = credentials
+        .get("language")
         .and_then(|v| v.as_str())
         .unwrap_or("zh")
         .to_string();
 
-    let auto_punctuation = credentials.get("autoPunctuation")
+    let auto_punctuation = credentials
+        .get("autoPunctuation")
         .and_then(|v| v.as_str())
         .map(|v| v == "true")
         .unwrap_or(true);
 
-    let app_id = credentials.get("appId").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let access_key = credentials.get("accessKey").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let app_id = credentials
+        .get("appId")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let access_key = credentials
+        .get("accessKey")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
 
     if app_id.is_empty() || access_key.is_empty() {
         return Err("API 配置不完整，请先在设置中填写认证信息".to_string());
@@ -560,7 +622,10 @@ fn load_recording_settings_from_store(app: &tauri::AppHandle) -> Result<Recordin
         auto_punctuation,
     };
 
-    Ok(RecordingConfig::Volcengine { asr_config, device_name })
+    Ok(RecordingConfig::Volcengine {
+        asr_config,
+        device_name,
+    })
 }
 
 /// 从持久化 store 中读取快捷键标签，解析为 HotkeyConfig 列表
@@ -585,27 +650,39 @@ async fn polish_and_output(
     cancelled: &Arc<AtomicBool>,
 ) -> bool {
     if cancelled.load(Ordering::SeqCst) {
-        log::info!("[asr-forward] session {} cancelled before output pipeline", session_id);
+        log::info!(
+            "[asr-forward] session {} cancelled before output pipeline",
+            session_id
+        );
         return false;
     }
 
     let (final_text, polished_text, polish_failed) = match get_polish_config(app) {
         Some(config) => {
             // 润色开启：跳过 FinalResult，直接 emit Polishing 携带原文
-            let _ = app.emit("asr-event", serde_json::json!({
-                "sessionId": session_id,
-                "event": {"Polishing": text}
-            }));
+            let _ = app.emit(
+                "asr-event",
+                serde_json::json!({
+                    "sessionId": session_id,
+                    "event": {"Polishing": text}
+                }),
+            );
             match polish::polish_text(&config, text).await {
                 Ok(polished) => {
                     if cancelled.load(Ordering::SeqCst) {
-                        log::info!("[asr-forward] session {} cancelled after polish, skipping output", session_id);
+                        log::info!(
+                            "[asr-forward] session {} cancelled after polish, skipping output",
+                            session_id
+                        );
                         return false;
                     }
-                    let _ = app.emit("asr-event", serde_json::json!({
-                        "sessionId": session_id,
-                        "event": {"PolishResult": &polished}
-                    }));
+                    let _ = app.emit(
+                        "asr-event",
+                        serde_json::json!({
+                            "sessionId": session_id,
+                            "event": {"PolishResult": &polished}
+                        }),
+                    );
                     (polished.clone(), Some(polished), false)
                 }
                 Err(e) => {
@@ -614,26 +691,35 @@ async fn polish_and_output(
                         return false;
                     }
                     log::error!("[asr-forward] polish failed: {}", e);
-                    let _ = app.emit("asr-event", serde_json::json!({
-                        "sessionId": session_id,
-                        "event": "PolishError"
-                    }));
+                    let _ = app.emit(
+                        "asr-event",
+                        serde_json::json!({
+                            "sessionId": session_id,
+                            "event": "PolishError"
+                        }),
+                    );
                     (text.to_string(), None, true)
                 }
             }
         }
         None => {
             // 润色关闭：正常 emit FinalResult
-            let _ = app.emit("asr-event", serde_json::json!({
-                "sessionId": session_id,
-                "event": {"FinalResult": text}
-            }));
+            let _ = app.emit(
+                "asr-event",
+                serde_json::json!({
+                    "sessionId": session_id,
+                    "event": {"FinalResult": text}
+                }),
+            );
             (text.to_string(), None, false)
         }
     };
 
     if cancelled.load(Ordering::SeqCst) {
-        log::info!("[asr-forward] session {} cancelled before final output", session_id);
+        log::info!(
+            "[asr-forward] session {} cancelled before final output",
+            session_id
+        );
         return polish_failed;
     }
 
@@ -673,19 +759,22 @@ fn get_polish_config(app: &tauri::AppHandle) -> Option<polish::PolishConfig> {
     }
 
     let providers = settings.get("providers")?.as_array()?;
-    let provider = providers.iter().find(|p| {
-        p.get("id").and_then(|v| v.as_str()) == Some(selected_provider_id)
-    })?;
+    let provider = providers
+        .iter()
+        .find(|p| p.get("id").and_then(|v| v.as_str()) == Some(selected_provider_id))?;
 
     let prompts = settings.get("prompts")?.as_array()?;
-    let prompt = prompts.iter().find(|p| {
-        p.get("id").and_then(|v| v.as_str()) == Some(selected_prompt_id)
-    })?;
+    let prompt = prompts
+        .iter()
+        .find(|p| p.get("id").and_then(|v| v.as_str()) == Some(selected_prompt_id))?;
 
     let base_url = provider.get("baseUrl")?.as_str()?.to_string();
     let api_key = provider.get("apiKey")?.as_str()?.to_string();
     let model = provider.get("model")?.as_str()?.to_string();
-    let temperature = provider.get("temperature").and_then(|v| v.as_f64()).unwrap_or(0.7);
+    let temperature = provider
+        .get("temperature")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.7);
     let prompt_content = prompt.get("content")?.as_str()?.to_string();
 
     if base_url.is_empty() || api_key.is_empty() || model.is_empty() {
@@ -693,7 +782,12 @@ fn get_polish_config(app: &tauri::AppHandle) -> Option<polish::PolishConfig> {
         return None;
     }
 
-    log::info!("[polish] config loaded: model={}, temperature={}, prompt_id={}", model, temperature, selected_prompt_id);
+    log::info!(
+        "[polish] config loaded: model={}, temperature={}, prompt_id={}",
+        model,
+        temperature,
+        selected_prompt_id
+    );
     Some(polish::PolishConfig {
         base_url,
         api_key,
@@ -726,13 +820,14 @@ pub fn run() {
                 .level_for("sayble_lib", log::LevelFilter::Debug)
                 .build(),
         )
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            // 重复启动时，聚焦已有窗口
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.unminimize();
-                let _ = window.set_focus();
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            if has_autostart_arg(args.iter().map(String::as_str)) {
+                log::info!("[autostart] ignored duplicate autostart launch");
+                return;
             }
+
+            // 重复手动启动时，聚焦已有窗口
+            show_main_window(app);
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init())
@@ -740,11 +835,12 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            None,
+            Some(vec![AUTOSTART_ARG]),
         ))
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let handle = app.handle().clone();
+            let launched_from_autostart = is_autostart_launch();
 
             TrayManager::setup(&handle)?;
 
@@ -798,7 +894,19 @@ pub fn run() {
                     } else {
                         log::info!("[autostart] disabled on setup (was enabled)");
                     }
+                } else if want_enabled && currently_enabled {
+                    if let Err(e) = autolaunch.enable() {
+                        log::error!("[autostart] failed to refresh on setup: {}", e);
+                    } else {
+                        log::info!("[autostart] refreshed on setup");
+                    }
                 }
+            }
+
+            if launched_from_autostart {
+                log::info!("[autostart] launched from autostart, keeping main window hidden");
+            } else {
+                show_main_window(&handle);
             }
 
             // 初始化 HotkeyManager：优先从持久化设置加载，否则用默认配置
@@ -970,6 +1078,7 @@ pub fn run() {
             cmd_restore_autostart,
             cmd_check_autostart,
             cmd_get_data_dir,
+            cmd_save_recording_file,
             cmd_load_history,
             cmd_clear_history,
             cmd_remove_history,
@@ -1023,18 +1132,23 @@ fn cmd_restore_autostart(app: tauri::AppHandle) -> Result<(), String> {
 fn cmd_check_autostart(app: tauri::AppHandle) -> Result<Option<String>, String> {
     log::info!("[cmd] check_autostart called");
     let autolaunch = app.autolaunch();
-    let want_enabled = app.state::<AppStore>()
-        .settings().get("app_settings")
+    let want_enabled = app
+        .state::<AppStore>()
+        .settings()
+        .get("app_settings")
         .and_then(|settings| settings.get("autoStart").and_then(|v| v.as_bool()))
         .unwrap_or(false);
     let currently_enabled = autolaunch.is_enabled().unwrap_or(false);
-    log::info!("[autostart] check: want_enabled={}, currently_enabled={}", want_enabled, currently_enabled);
+    log::info!(
+        "[autostart] check: want_enabled={}, currently_enabled={}",
+        want_enabled,
+        currently_enabled
+    );
 
     if want_enabled && !currently_enabled {
         #[cfg(target_os = "windows")]
         {
-            let source = check_autostart_hijacked()
-                .unwrap_or_else(|| "未知来源".to_string());
+            let source = check_autostart_hijacked().unwrap_or_else(|| "未知来源".to_string());
             log::warn!("[autostart] check: disabled by {}", source);
             Ok(Some(source))
         }
@@ -1064,16 +1178,20 @@ async fn cmd_test_asr_connection(
 ) -> Result<String, String> {
     match provider_type.as_str() {
         #[cfg(target_os = "windows")]
-        "sapi" => {
-            tokio::task::spawn_blocking(|| {
-                asr::sapi::test_sapi_available()
-            })
+        "sapi" => tokio::task::spawn_blocking(|| asr::sapi::test_sapi_available())
             .await
-            .map_err(|e| format!("任务执行失败: {}", e))?
-        }
+            .map_err(|e| format!("任务执行失败: {}", e))?,
         "volcengine" => {
-            let app_id = credentials.get("appId").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let access_key = credentials.get("accessKey").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let app_id = credentials
+                .get("appId")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let access_key = credentials
+                .get("accessKey")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
             if app_id.is_empty() || access_key.is_empty() {
                 return Err("请填写完整的认证信息".to_string());
             }
@@ -1089,10 +1207,7 @@ async fn cmd_test_asr_connection(
 }
 
 #[tauri::command]
-async fn cmd_test_polish_provider(
-    base_url: String,
-    api_key: String,
-) -> Result<String, String> {
+async fn cmd_test_polish_provider(base_url: String, api_key: String) -> Result<String, String> {
     log::info!("[cmd] test_polish_provider called, base_url={}", base_url);
     let url = format!("{}/models", base_url.trim_end_matches('/'));
     log::info!("[cmd] test_polish_provider GET {}", url);
@@ -1113,7 +1228,11 @@ async fn cmd_test_polish_provider(
         Ok("连接成功".to_string())
     } else {
         let body = resp.text().await.unwrap_or_default();
-        log::warn!("[cmd] test_polish_provider failed, status={}, body={}", status, body);
+        log::warn!(
+            "[cmd] test_polish_provider failed, status={}, body={}",
+            status,
+            body
+        );
         Err(format!("连接失败，状态码: {}", status))
     }
 }
@@ -1133,13 +1252,20 @@ fn cmd_save_settings(
             settings_store.set(k, v.clone());
         }
     }
-    settings_store.save().map_err(|e| format!("Failed to save store: {}", e))?;
+    settings_store
+        .save()
+        .map_err(|e| format!("Failed to save store: {}", e))?;
 
     // 从 app_settings 提取副作用字段
-    let app_settings = settings.get("app_settings").unwrap_or(&serde_json::Value::Null);
+    let app_settings = settings
+        .get("app_settings")
+        .unwrap_or(&serde_json::Value::Null);
 
     // 同步快捷键配置到 HotkeyManager
-    let toggle = app_settings.get("toggleHotkey").and_then(|v| v.as_str()).unwrap_or("");
+    let toggle = app_settings
+        .get("toggleHotkey")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     let configs = parse_hotkey_configs(toggle);
     if !configs.is_empty() {
         if let Ok(mgr) = hotkey_mgr.lock() {
@@ -1149,7 +1275,10 @@ fn cmd_save_settings(
     }
 
     // 同步自启动状态
-    let auto_start = app_settings.get("autoStart").and_then(|v| v.as_bool()).unwrap_or(false);
+    let auto_start = app_settings
+        .get("autoStart")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     let autolaunch = app.autolaunch();
     if auto_start {
         if let Err(e) = autolaunch.enable() {
@@ -1182,7 +1311,9 @@ fn cmd_load_settings(app: tauri::AppHandle) -> Result<serde_json::Value, String>
     // 确保内建零配置引擎（如 sapi）在 providers 中有条目
     if let Some(asr) = map.get_mut("asr_settings").and_then(|v| v.as_object_mut()) {
         if let Some(providers) = asr.get_mut("providers").and_then(|v| v.as_object_mut()) {
-            providers.entry("sapi").or_insert_with(|| serde_json::json!({}));
+            providers
+                .entry("sapi")
+                .or_insert_with(|| serde_json::json!({}));
         }
     }
 
@@ -1199,9 +1330,16 @@ fn start_recording_inner(
     // 如果上一次录音还没结束，先强制停掉旧会话
     {
         let mut f = flag.lock().map_err(|e| e.to_string())?;
-        log::debug!("[recording] current flag: is_recording={}, session_id={}", f.is_recording, f.session_id);
+        log::debug!(
+            "[recording] current flag: is_recording={}, session_id={}",
+            f.is_recording,
+            f.session_id
+        );
         if f.is_recording {
-            log::warn!("[recording] force stopping previous session {}", f.session_id);
+            log::warn!(
+                "[recording] force stopping previous session {}",
+                f.session_id
+            );
             f.cancelled.store(true, Ordering::SeqCst);
             if let Some(tx) = f.stop_tx.take() {
                 let _ = tx.send(());
@@ -1236,8 +1374,14 @@ fn start_recording_inner(
     let is_streaming_engine = false;
 
     match config {
-        RecordingConfig::Volcengine { asr_config, device_name } => {
-            log::info!("[recording] using Volcengine engine, device={}", device_name);
+        RecordingConfig::Volcengine {
+            asr_config,
+            device_name,
+        } => {
+            log::info!(
+                "[recording] using Volcengine engine, device={}",
+                device_name
+            );
             VolcEngineAsr::validate_config(&asr_config)?;
 
             let (audio_tx, audio_rx) = tokio::sync::mpsc::channel::<Vec<i16>>(100);
@@ -1247,8 +1391,13 @@ fn start_recording_inner(
             let event_tx_clone = event_tx.clone();
             let is_running_clone = is_running.clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(e) =
-                    asr::volcengine::run_asr_session(asr_config, event_tx_clone.clone(), audio_rx, is_running_clone).await
+                if let Err(e) = asr::volcengine::run_asr_session(
+                    asr_config,
+                    event_tx_clone.clone(),
+                    audio_rx,
+                    is_running_clone,
+                )
+                .await
                 {
                     let _ = event_tx_clone.send(AsrEvent::Error(e));
                 }
@@ -1376,7 +1525,11 @@ fn start_recording_inner(
     //    每个事件包装为 { sessionId, event }，Disconnected 内部消化，新增 Finished
     let app_clone = app.clone();
     tauri::async_runtime::spawn(async move {
-        log::debug!("[asr-forward] session {} forward task started (streaming={})", session_id, is_streaming_engine);
+        log::debug!(
+            "[asr-forward] session {} forward task started (streaming={})",
+            session_id,
+            is_streaming_engine
+        );
         let mut last_partial_text = String::new();
         let mut had_final = false;
         let mut terminated = false;
@@ -1389,10 +1542,13 @@ fn start_recording_inner(
                     match &event {
                         AsrEvent::Connected => {
                             if !cancelled.load(Ordering::SeqCst) {
-                                let _ = app_clone.emit("asr-event", serde_json::json!({
-                                    "sessionId": session_id,
-                                    "event": serde_json::to_value(&event).unwrap_or_default()
-                                }));
+                                let _ = app_clone.emit(
+                                    "asr-event",
+                                    serde_json::json!({
+                                        "sessionId": session_id,
+                                        "event": serde_json::to_value(&event).unwrap_or_default()
+                                    }),
+                                );
                             }
                         }
                         AsrEvent::PartialResult(text) => {
@@ -1407,16 +1563,22 @@ fn start_recording_inner(
                                     format!("{}{}", accumulated_text, text)
                                 };
                                 last_partial_text = display.clone();
-                                let _ = app_clone.emit("asr-event", serde_json::json!({
-                                    "sessionId": session_id,
-                                    "event": {"PartialResult": display}
-                                }));
+                                let _ = app_clone.emit(
+                                    "asr-event",
+                                    serde_json::json!({
+                                        "sessionId": session_id,
+                                        "event": {"PartialResult": display}
+                                    }),
+                                );
                             } else {
                                 last_partial_text = text.clone();
-                                let _ = app_clone.emit("asr-event", serde_json::json!({
-                                    "sessionId": session_id,
-                                    "event": serde_json::to_value(&event).unwrap_or_default()
-                                }));
+                                let _ = app_clone.emit(
+                                    "asr-event",
+                                    serde_json::json!({
+                                        "sessionId": session_id,
+                                        "event": serde_json::to_value(&event).unwrap_or_default()
+                                    }),
+                                );
                             }
                         }
                         #[allow(unused_assignments)]
@@ -1428,38 +1590,56 @@ fn start_recording_inner(
                                 // 流式引擎：累积文本，不 break，等 Disconnected
                                 accumulated_text.push_str(text);
                                 // 更新浮窗显示累积文本
-                                let _ = app_clone.emit("asr-event", serde_json::json!({
-                                    "sessionId": session_id,
-                                    "event": {"PartialResult": &accumulated_text}
-                                }));
+                                let _ = app_clone.emit(
+                                    "asr-event",
+                                    serde_json::json!({
+                                        "sessionId": session_id,
+                                        "event": {"PartialResult": &accumulated_text}
+                                    }),
+                                );
                             } else {
                                 // 单次引擎（火山引擎）：直接输出并结束
                                 if cancelled.load(Ordering::SeqCst) {
-                                    log::info!("[asr-forward] session {} cancelled, skipping output", session_id);
+                                    log::info!(
+                                        "[asr-forward] session {} cancelled, skipping output",
+                                        session_id
+                                    );
                                 } else {
-                                    app_clone.state::<AppStore>().accumulate_stats(text.chars().count(), *duration_ms);
-                                    polish_and_output(&app_clone, session_id, text, &cancelled).await;
+                                    app_clone
+                                        .state::<AppStore>()
+                                        .accumulate_stats(text.chars().count(), *duration_ms);
+                                    polish_and_output(&app_clone, session_id, text, &cancelled)
+                                        .await;
                                 }
-                                let _ = app_clone.emit("asr-event", serde_json::json!({
-                                    "sessionId": session_id,
-                                    "event": "Finished"
-                                }));
+                                let _ = app_clone.emit(
+                                    "asr-event",
+                                    serde_json::json!({
+                                        "sessionId": session_id,
+                                        "event": "Finished"
+                                    }),
+                                );
                                 terminated = true;
                                 break;
                             }
                         }
                         AsrEvent::Error(_) => {
                             if !cancelled.load(Ordering::SeqCst) {
-                                let _ = app_clone.emit("asr-event", serde_json::json!({
-                                    "sessionId": session_id,
-                                    "event": serde_json::to_value(&event).unwrap_or_default()
-                                }));
+                                let _ = app_clone.emit(
+                                    "asr-event",
+                                    serde_json::json!({
+                                        "sessionId": session_id,
+                                        "event": serde_json::to_value(&event).unwrap_or_default()
+                                    }),
+                                );
                                 tokio::time::sleep(std::time::Duration::from_secs(3)).await;
                             }
-                            let _ = app_clone.emit("asr-event", serde_json::json!({
-                                "sessionId": session_id,
-                                "event": "Finished"
-                            }));
+                            let _ = app_clone.emit(
+                                "asr-event",
+                                serde_json::json!({
+                                    "sessionId": session_id,
+                                    "event": "Finished"
+                                }),
+                            );
                             terminated = true;
                             break;
                         }
@@ -1470,20 +1650,39 @@ fn start_recording_inner(
                             } else if is_streaming_engine && !accumulated_text.is_empty() {
                                 // 流式引擎：Disconnected 时统一输出累积文本
                                 log::info!("[asr-forward] session {} streaming disconnect, outputting accumulated text len={}", session_id, accumulated_text.len());
-                                app_clone.state::<AppStore>().accumulate_stats(accumulated_text.chars().count(), None);
-                                polish_and_output(&app_clone, session_id, &accumulated_text, &cancelled).await;
+                                app_clone
+                                    .state::<AppStore>()
+                                    .accumulate_stats(accumulated_text.chars().count(), None);
+                                polish_and_output(
+                                    &app_clone,
+                                    session_id,
+                                    &accumulated_text,
+                                    &cancelled,
+                                )
+                                .await;
                             } else if !had_final {
                                 if !last_partial_text.is_empty() {
-                                    app_clone.state::<AppStore>().accumulate_stats(last_partial_text.chars().count(), None);
-                                    polish_and_output(&app_clone, session_id, &last_partial_text, &cancelled).await;
+                                    app_clone
+                                        .state::<AppStore>()
+                                        .accumulate_stats(last_partial_text.chars().count(), None);
+                                    polish_and_output(
+                                        &app_clone,
+                                        session_id,
+                                        &last_partial_text,
+                                        &cancelled,
+                                    )
+                                    .await;
                                 }
                             } else {
                                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                             }
-                            let _ = app_clone.emit("asr-event", serde_json::json!({
-                                "sessionId": session_id,
-                                "event": "Finished"
-                            }));
+                            let _ = app_clone.emit(
+                                "asr-event",
+                                serde_json::json!({
+                                    "sessionId": session_id,
+                                    "event": "Finished"
+                                }),
+                            );
                             terminated = true;
                             break;
                         }
@@ -1501,16 +1700,31 @@ fn start_recording_inner(
         // channel 断开且没收到过终止事件时，补发 Finished 确保前端不会卡住
         if !terminated {
             // 流式引擎 channel 断开时也要输出累积文本
-            if is_streaming_engine && !accumulated_text.is_empty() && !cancelled.load(Ordering::SeqCst) {
-                log::info!("[asr-forward] session {} channel ended, outputting accumulated text len={}", session_id, accumulated_text.len());
-                app_clone.state::<AppStore>().accumulate_stats(accumulated_text.chars().count(), None);
+            if is_streaming_engine
+                && !accumulated_text.is_empty()
+                && !cancelled.load(Ordering::SeqCst)
+            {
+                log::info!(
+                    "[asr-forward] session {} channel ended, outputting accumulated text len={}",
+                    session_id,
+                    accumulated_text.len()
+                );
+                app_clone
+                    .state::<AppStore>()
+                    .accumulate_stats(accumulated_text.chars().count(), None);
                 polish_and_output(&app_clone, session_id, &accumulated_text, &cancelled).await;
             }
-            log::warn!("[asr-forward] session {} channel ended without terminal event, sending Finished", session_id);
-            let _ = app_clone.emit("asr-event", serde_json::json!({
-                "sessionId": session_id,
-                "event": "Finished"
-            }));
+            log::warn!(
+                "[asr-forward] session {} channel ended without terminal event, sending Finished",
+                session_id
+            );
+            let _ = app_clone.emit(
+                "asr-event",
+                serde_json::json!({
+                    "sessionId": session_id,
+                    "event": "Finished"
+                }),
+            );
         }
     });
 
@@ -1519,7 +1733,10 @@ fn start_recording_inner(
         let mut f = flag.lock().map_err(|e| e.to_string())?;
         f.is_recording = true;
         f.stop_tx = Some(stop_tx);
-        log::debug!("[recording] session {} flag set: is_recording=true", session_id);
+        log::debug!(
+            "[recording] session {} flag set: is_recording=true",
+            session_id
+        );
     }
 
     if let Err(e) = show_floating_window(app) {
@@ -1543,7 +1760,11 @@ async fn cmd_start_recording(
 /// 内部录音停止逻辑，可从任意线程调用
 fn stop_recording_inner(flag: &Arc<Mutex<RecordingFlag>>) -> Result<u64, String> {
     let mut f = flag.lock().map_err(|e| e.to_string())?;
-    log::info!("[recording] stop_recording_inner, is_recording={}, session_id={}", f.is_recording, f.session_id);
+    log::info!(
+        "[recording] stop_recording_inner, is_recording={}, session_id={}",
+        f.is_recording,
+        f.session_id
+    );
     if !f.is_recording {
         return Err("当前没有在录音".to_string());
     }
@@ -1552,14 +1773,21 @@ fn stop_recording_inner(flag: &Arc<Mutex<RecordingFlag>>) -> Result<u64, String>
         let _ = tx.send(());
     }
     f.is_recording = false;
-    log::debug!("[recording] session {} stopped, is_recording=false", f.session_id);
+    log::debug!(
+        "[recording] session {} stopped, is_recording=false",
+        f.session_id
+    );
     Ok(session_id)
 }
 
 /// 内部录音取消逻辑：无论当前处于录音、识别还是润色阶段，都标记当前 session 不允许输出。
 fn cancel_recording_inner(flag: &Arc<Mutex<RecordingFlag>>) -> Result<Option<u64>, String> {
     let mut f = flag.lock().map_err(|e| e.to_string())?;
-    let session_id = if f.session_id == 0 { None } else { Some(f.session_id) };
+    let session_id = if f.session_id == 0 {
+        None
+    } else {
+        Some(f.session_id)
+    };
     log::info!(
         "[recording] cancel_recording_inner, is_recording={}, session_id={:?}",
         f.is_recording,
@@ -1574,9 +1802,7 @@ fn cancel_recording_inner(flag: &Arc<Mutex<RecordingFlag>>) -> Result<Option<u64
 }
 
 #[tauri::command]
-fn cmd_stop_recording(
-    flag: tauri::State<'_, Arc<Mutex<RecordingFlag>>>,
-) -> Result<(), String> {
+fn cmd_stop_recording(flag: tauri::State<'_, Arc<Mutex<RecordingFlag>>>) -> Result<(), String> {
     log::info!("[cmd] stop_recording called");
     stop_recording_inner(&flag).map(|_| ())
 }
@@ -1613,6 +1839,50 @@ fn cmd_get_data_dir() -> serde_json::Value {
         "settings": base.join("settings.json").to_string_lossy().into_owned(),
         "logs": base.join("logs").join("sayble.log").to_string_lossy().into_owned(),
     })
+}
+
+fn sanitize_file_name(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| match c {
+            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '_',
+            c if c.is_control() => '_',
+            c => c,
+        })
+        .collect();
+
+    let cleaned = cleaned.trim().trim_matches('.').to_string();
+    if cleaned.is_empty() {
+        "sayble-recording.webm".to_string()
+    } else {
+        cleaned
+    }
+}
+
+#[tauri::command]
+fn cmd_save_recording_file(
+    file_name: String,
+    path: String,
+    bytes: Vec<u8>,
+) -> Result<String, String> {
+    if bytes.is_empty() {
+        return Err("录音为空".to_string());
+    }
+
+    let mut path = std::path::PathBuf::from(path);
+    if path.as_os_str().is_empty() {
+        return Err("未选择保存位置".to_string());
+    }
+    if path.is_dir() {
+        path = path.join(sanitize_file_name(&file_name));
+    }
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("创建保存目录失败: {}", e))?;
+    }
+    std::fs::write(&path, bytes).map_err(|e| format!("保存失败: {}", e))?;
+
+    Ok(path.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
@@ -1667,7 +1937,11 @@ async fn cmd_check_update() -> Result<Option<String>, String> {
 
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        log::error!("[cmd] check_update: GitHub API error {}, body: {}", status, body);
+        log::error!(
+            "[cmd] check_update: GitHub API error {}, body: {}",
+            status,
+            body
+        );
 
         if status.as_u16() == 403 && body.contains("rate limit") {
             return Err("GitHub API 速率限制已超出，请稍后再试".to_string());
@@ -1682,12 +1956,22 @@ async fn cmd_check_update() -> Result<Option<String>, String> {
     })?;
 
     let current_version = env!("CARGO_PKG_VERSION");
-    let latest_version = release.tag_name.strip_prefix('v').unwrap_or(&release.tag_name);
+    let latest_version = release
+        .tag_name
+        .strip_prefix('v')
+        .unwrap_or(&release.tag_name);
 
-    log::info!("[cmd] check_update: current={}, latest={}", current_version, latest_version);
+    log::info!(
+        "[cmd] check_update: current={}, latest={}",
+        current_version,
+        latest_version
+    );
 
     if latest_version > current_version {
-        log::info!("[cmd] check_update: new version available, url={}", release.html_url);
+        log::info!(
+            "[cmd] check_update: new version available, url={}",
+            release.html_url
+        );
         Ok(Some(release.html_url))
     } else {
         log::info!("[cmd] check_update: already up to date");
@@ -1720,6 +2004,12 @@ mod tests {
     fn is_silent_audio_uses_rms_threshold() {
         assert!(is_silent_audio(&[0, 100, -100, 200, -200]));
         assert!(!is_silent_audio(&[1200, -1200, 1200, -1200]));
+    }
+
+    #[test]
+    fn has_autostart_arg_detects_exact_startup_flag() {
+        assert!(has_autostart_arg(["sayble.exe", AUTOSTART_ARG]));
+        assert!(!has_autostart_arg(["sayble.exe", "--not-autostart"]));
     }
 
     #[test]

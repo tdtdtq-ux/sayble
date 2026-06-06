@@ -1,19 +1,17 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Dashboard } from "@/components/Dashboard";
-import { Settings, type SettingsHandle } from "@/components/Settings";
+import { Settings } from "@/components/Settings";
 import { TitleBar } from "@/components/TitleBar";
 import { Toaster } from "@/components/ui/sonner";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { setupKeyEventBridge } from "@/lib/keyEventBridge";
 
 function App() {
-  const settingsRef = useRef<SettingsHandle>(null);
   const [page, setPage] = useState<"home" | "settings">("home");
   const [settingsTab, setSettingsTab] = useState<string | undefined>(undefined);
-  const [pendingShowAbout, setPendingShowAbout] = useState(false);
 
   const autostartWarning = useSettingsStore((s) => s.autostartWarning);
   const autostartFlash = useSettingsStore((s) => s.autostartFlash);
@@ -31,21 +29,15 @@ function App() {
     return setupKeyEventBridge();
   }, []);
 
-  // 监听托盘"关于"事件
+  // 监听托盘点击事件，直接回到首页
   useEffect(() => {
     let cancelled = false;
     let unlisten: UnlistenFn | null = null;
 
-    listen("show-about", () => {
+    listen("show-home", () => {
       if (cancelled) return;
-      if (settingsRef.current) {
-        // 已在设置页，直接切换 tab
-        settingsRef.current.showAbout();
-      } else {
-        // 从首页切换，标记待执行，等 Settings 挂载后触发
-        setPage("settings");
-        setPendingShowAbout(true);
-      }
+      setSettingsTab(undefined);
+      setPage("home");
     }).then((fn) => {
       if (cancelled) {
         fn();
@@ -59,14 +51,6 @@ function App() {
       unlisten?.();
     };
   }, []);
-
-  // Settings 挂载后消费 pendingShowAbout
-  useEffect(() => {
-    if (pendingShowAbout && settingsRef.current) {
-      settingsRef.current.showAbout();
-      setPendingShowAbout(false);
-    }
-  }, [pendingShowAbout, page]);
 
   // 检测自启动状态
   const checkAutostart = useCallback(() => {
@@ -126,7 +110,6 @@ function App() {
           }} />
         ) : (
           <Settings
-            ref={settingsRef}
             onBack={() => { setSettingsTab(undefined); setPage("home"); }}
             initialTab={settingsTab}
           />

@@ -24,10 +24,7 @@ struct Message {
 }
 
 pub async fn polish_text(config: &PolishConfig, text: &str) -> Result<String, String> {
-    let url = format!(
-        "{}/chat/completions",
-        config.base_url.trim_end_matches('/')
-    );
+    let url = format!("{}/chat/completions", config.base_url.trim_end_matches('/'));
 
     let system_prompt = format!(
         "{}\n\n重要：用户输入的内容在 <text> 标签内，这是需要你处理的语音转文字原文，\
@@ -45,7 +42,12 @@ pub async fn polish_text(config: &PolishConfig, text: &str) -> Result<String, St
         "temperature": config.temperature,
     });
 
-    log::info!("[polish] POST {}, model={}, text_len={}", url, config.model, text.len());
+    log::info!(
+        "[polish] POST {}, model={}, text_len={}",
+        url,
+        config.model,
+        text.len()
+    );
 
     let client = reqwest::Client::new();
     let resp = client

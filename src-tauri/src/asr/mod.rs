@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 pub mod protocol;
-pub mod volcengine;
 #[cfg(target_os = "windows")]
 pub mod sapi;
+pub mod volcengine;
 
 pub use volcengine::VolcEngineAsr;
 

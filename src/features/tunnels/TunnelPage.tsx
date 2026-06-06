@@ -17,8 +17,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type {
   TunnelConfig,
+  TunnelDirection,
   TunnelEvent,
   TunnelLogEntry,
   TunnelRunState,
@@ -40,11 +42,46 @@ const logText: Record<TunnelLogEntry["level"], string> = {
   success: "成功",
 };
 
+const directionText: Record<TunnelDirection, string> = {
+  local: "正向 -L",
+  remote: "反向 -R",
+};
+
+const endpointLabels: Record<
+  TunnelDirection,
+  {
+    listenHost: string;
+    listenPort: string;
+    targetHost: string;
+    targetPort: string;
+    listenPlaceholder: string;
+    targetPlaceholder: string;
+  }
+> = {
+  local: {
+    listenHost: "本地监听地址",
+    listenPort: "本地监听端口",
+    targetHost: "远程目标地址",
+    targetPort: "远程目标端口",
+    listenPlaceholder: "127.0.0.1",
+    targetPlaceholder: "rds.example.com",
+  },
+  remote: {
+    listenHost: "远端监听地址",
+    listenPort: "远端监听端口",
+    targetHost: "本地目标地址",
+    targetPort: "本地目标端口",
+    listenPlaceholder: "127.0.0.1",
+    targetPlaceholder: "127.0.0.1",
+  },
+};
+
 function createTunnel(): TunnelConfig {
   return {
     id: crypto.randomUUID(),
     name: "新隧道",
     sshHost: "prod2",
+    direction: "local",
     localHost: "127.0.0.1",
     localPort: 3306,
     remoteHost: "",
@@ -57,6 +94,43 @@ function createTunnel(): TunnelConfig {
     serverAliveCountMax: 3,
     exitOnForwardFailure: true,
   };
+}
+
+function getDirection(config: TunnelConfig): TunnelDirection {
+  return config.direction === "remote" ? "remote" : "local";
+}
+
+function formatEndpoint(config: TunnelConfig) {
+  const direction = getDirection(config);
+  const listenLabel = direction === "remote" ? "远端" : "本地";
+  const targetLabel = direction === "remote" ? "本地" : "远端";
+  return `${directionText[direction]} ${listenLabel} ${config.localHost || "127.0.0.1"}:${config.localPort} -> ${targetLabel} ${config.remoteHost || "未配置"}:${config.remotePort}`;
+}
+
+function formatSshCommand(config: TunnelConfig) {
+  const direction = getDirection(config);
+  const spec = config.localHost.trim()
+    ? `${config.localHost}:${config.localPort}:${config.remoteHost || "<target-host>"}:${config.remotePort}`
+    : `${config.localPort}:${config.remoteHost || "<target-host>"}:${config.remotePort}`;
+  const args = [
+    "ssh",
+    "-N",
+    direction === "remote" ? "-R" : "-L",
+    spec,
+    "-o",
+    `TCPKeepAlive=${config.tcpKeepAlive ? "yes" : "no"}`,
+    "-o",
+    `ServerAliveInterval=${config.serverAliveInterval}`,
+    "-o",
+    `ServerAliveCountMax=${config.serverAliveCountMax}`,
+    "-o",
+    `ExitOnForwardFailure=${config.exitOnForwardFailure ? "yes" : "no"}`,
+  ];
+  if (config.compression) {
+    args.push("-C");
+  }
+  args.push(config.sshHost || "<ssh-host>");
+  return args.join(" ");
 }
 
 function formatTime(timestamp: string) {
@@ -85,12 +159,18 @@ function getBadgeVariant(state: TunnelRunState): "default" | "secondary" | "dest
 function validateDraft(config: TunnelConfig) {
   if (!config.name.trim()) return "请填写隧道名称";
   if (!config.sshHost.trim()) return "请填写 SSH 主机";
-  if (!config.remoteHost.trim()) return "请填写远程主机";
+  if (!config.remoteHost.trim()) {
+    return getDirection(config) === "remote" ? "请填写本地目标地址" : "请填写远程目标地址";
+  }
   if (!config.localPort || config.localPort < 1 || config.localPort > 65535) {
-    return "本地端口必须在 1-65535 之间";
+    return getDirection(config) === "remote"
+      ? "远端监听端口必须在 1-65535 之间"
+      : "本地监听端口必须在 1-65535 之间";
   }
   if (!config.remotePort || config.remotePort < 1 || config.remotePort > 65535) {
-    return "远程端口必须在 1-65535 之间";
+    return getDirection(config) === "remote"
+      ? "本地目标端口必须在 1-65535 之间"
+      : "远程目标端口必须在 1-65535 之间";
   }
   return null;
 }
@@ -356,6 +436,9 @@ export function TunnelPage() {
     }
   };
 
+  const draftDirection = draft ? getDirection(draft) : "local";
+  const labels = endpointLabels[draftDirection];
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 items-center justify-between px-6 py-3">
@@ -401,7 +484,7 @@ export function TunnelPage() {
                   lastError: null,
                   reconnectAttempt: 0,
                 };
-                const endpoint = `${config.localHost || "127.0.0.1"}:${config.localPort} -> ${config.remoteHost || "未配置"}:${config.remotePort}`;
+                const endpoint = formatEndpoint(config);
 
                 return (
                   <button
@@ -446,7 +529,7 @@ export function TunnelPage() {
                     {dirty && !isUnsaved && <Badge variant="secondary">已修改</Badge>}
                   </div>
                   <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                    {draft.localHost || "127.0.0.1"}:{draft.localPort} 到 {draft.remoteHost || "远程主机"}:{draft.remotePort}
+                    {formatEndpoint(draft)}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
@@ -497,16 +580,38 @@ export function TunnelPage() {
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="tunnel-local-host">本地监听</Label>
+                    <Label htmlFor="tunnel-direction">转发方向</Label>
+                    <ToggleGroup
+                      id="tunnel-direction"
+                      type="single"
+                      variant="outline"
+                      size="sm"
+                      value={draftDirection}
+                      onValueChange={(value) => {
+                        if (value === "local" || value === "remote") {
+                          updateDraft("direction", value);
+                        }
+                      }}
+                    >
+                      <ToggleGroupItem value="local" aria-label="正向转发">
+                        正向 -L
+                      </ToggleGroupItem>
+                      <ToggleGroupItem value="remote" aria-label="反向转发">
+                        反向 -R
+                      </ToggleGroupItem>
+                    </ToggleGroup>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="tunnel-local-host">{labels.listenHost}</Label>
                     <Input
                       id="tunnel-local-host"
                       value={draft.localHost}
-                      placeholder="127.0.0.1"
+                      placeholder={labels.listenPlaceholder}
                       onChange={(event) => updateDraft("localHost", event.target.value)}
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="tunnel-local-port">本地端口</Label>
+                    <Label htmlFor="tunnel-local-port">{labels.listenPort}</Label>
                     <Input
                       id="tunnel-local-port"
                       type="number"
@@ -517,16 +622,16 @@ export function TunnelPage() {
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="tunnel-remote-host">远程主机</Label>
+                    <Label htmlFor="tunnel-remote-host">{labels.targetHost}</Label>
                     <Input
                       id="tunnel-remote-host"
                       value={draft.remoteHost}
-                      placeholder="rds.example.com"
+                      placeholder={labels.targetPlaceholder}
                       onChange={(event) => updateDraft("remoteHost", event.target.value)}
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="tunnel-remote-port">远程端口</Label>
+                    <Label htmlFor="tunnel-remote-port">{labels.targetPort}</Label>
                     <Input
                       id="tunnel-remote-port"
                       type="number"
@@ -536,6 +641,16 @@ export function TunnelPage() {
                       onChange={(event) => updateDraft("remotePort", toPort(event.target.value))}
                     />
                   </div>
+                </div>
+
+                <div className="mt-4 flex flex-col gap-1.5">
+                  <Label htmlFor="tunnel-command-preview">命令预览</Label>
+                  <Input
+                    id="tunnel-command-preview"
+                    readOnly
+                    value={formatSshCommand(draft)}
+                    className="font-mono text-xs"
+                  />
                 </div>
 
                 <Separator className="my-4" />

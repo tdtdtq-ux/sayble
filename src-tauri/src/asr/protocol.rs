@@ -190,7 +190,8 @@ pub fn build_full_client_request(request: &AsrRequest) -> Result<Vec<u8>, String
         ..Default::default()
     };
 
-    let payload = serde_json::to_vec(request).map_err(|e| format!("JSON serialize error: {}", e))?;
+    let payload =
+        serde_json::to_vec(request).map_err(|e| format!("JSON serialize error: {}", e))?;
 
     let mut frame = header.encode();
     frame
@@ -242,9 +243,7 @@ pub fn parse_server_response(data: &[u8]) -> Result<(ProtocolHeader, Option<AsrR
     }
 
     let mut cursor = Cursor::new(&data[size_offset..]);
-    let payload_size = cursor
-        .read_u32::<BigEndian>()
-        .map_err(|e| e.to_string())? as usize;
+    let payload_size = cursor.read_u32::<BigEndian>().map_err(|e| e.to_string())? as usize;
 
     if payload_size == 0 {
         return Ok((header, None));
@@ -264,8 +263,8 @@ pub fn parse_server_response(data: &[u8]) -> Result<(ProtocolHeader, Option<AsrR
     let payload_data = &data[payload_start..payload_end];
 
     if header.is_server_response() || header.is_server_error() {
-        let response: AsrResponse = serde_json::from_slice(payload_data)
-            .map_err(|e| format!("JSON parse error: {}", e))?;
+        let response: AsrResponse =
+            serde_json::from_slice(payload_data).map_err(|e| format!("JSON parse error: {}", e))?;
         Ok((header, Some(response)))
     } else {
         Ok((header, None))

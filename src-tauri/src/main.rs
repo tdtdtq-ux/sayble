@@ -9,7 +9,10 @@ fn main() {
         let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
         let version = env!("CARGO_PKG_VERSION");
         let build_time = env!("BUILD_TIME");
-        let msg = format!("[{}] PANIC (v{}, built {}): {}\n", timestamp, version, build_time, info);
+        let msg = format!(
+            "[{}] PANIC (v{}, built {}): {}\n",
+            timestamp, version, build_time, info
+        );
         let _ = std::fs::OpenOptions::new()
             .create(true)
             .append(true)

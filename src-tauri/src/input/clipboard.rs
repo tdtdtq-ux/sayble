@@ -15,22 +15,19 @@ impl ClipboardOutput {
         log::info!("[output] clipboard paste start, text_len={}", text.len());
         let _lock = CLIPBOARD_LOCK.lock().map_err(|e| e.to_string())?;
 
-        let mut clipboard =
-            Clipboard::new().map_err(|e| {
-                log::error!("[output] failed to access clipboard: {}", e);
-                format!("Failed to access clipboard: {}", e)
-            })?;
+        let mut clipboard = Clipboard::new().map_err(|e| {
+            log::error!("[output] failed to access clipboard: {}", e);
+            format!("Failed to access clipboard: {}", e)
+        })?;
 
         // 备份原剪贴板内容
         let backup = clipboard.get_text().ok();
 
         // 写入识别结果
-        clipboard
-            .set_text(text)
-            .map_err(|e| {
-                log::error!("[output] failed to set clipboard text: {}", e);
-                format!("Failed to set clipboard: {}", e)
-            })?;
+        clipboard.set_text(text).map_err(|e| {
+            log::error!("[output] failed to set clipboard text: {}", e);
+            format!("Failed to set clipboard: {}", e)
+        })?;
 
         // 短暂延迟确保剪贴板数据就绪
         std::thread::sleep(std::time::Duration::from_millis(50));
@@ -79,8 +76,8 @@ impl ClipboardOutput {
 fn simulate_ctrl_v() -> Result<(), String> {
     use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 
-    let mut enigo = Enigo::new(&Settings::default())
-        .map_err(|e| format!("Failed to create Enigo: {}", e))?;
+    let mut enigo =
+        Enigo::new(&Settings::default()).map_err(|e| format!("Failed to create Enigo: {}", e))?;
 
     enigo
         .key(Key::Control, Direction::Press)

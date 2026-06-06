@@ -10,10 +10,7 @@ use windows::Win32::System::Com::*;
 ///
 /// - `event_tx`: 发送 AsrEvent 到调用方
 /// - `is_running`: 外部控制停止的标志
-pub fn run_sapi_session(
-    event_tx: mpsc::Sender<AsrEvent>,
-    is_running: Arc<Mutex<bool>>,
-) {
+pub fn run_sapi_session(event_tx: mpsc::Sender<AsrEvent>, is_running: Arc<Mutex<bool>>) {
     unsafe {
         // 1. 初始化 COM（STA 模式）
         let hr = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
@@ -37,32 +34,25 @@ unsafe fn run_sapi_session_inner(
     is_running: &Arc<Mutex<bool>>,
 ) -> std::result::Result<(), String> {
     // 2. 创建进程内识别器（不弹系统引导向导）
-    let reco: ISpRecognizer = CoCreateInstance(
-        &SpInprocRecognizer,
-        None,
-        CLSCTX_ALL,
-    ).map_err(|e| format!("创建语音识别器失败: {:?}", e))?;
+    let reco: ISpRecognizer = CoCreateInstance(&SpInprocRecognizer, None, CLSCTX_ALL)
+        .map_err(|e| format!("创建语音识别器失败: {:?}", e))?;
 
     // 2.1 设置音频输入为系统默认麦克风
-    let cat: ISpObjectTokenCategory = CoCreateInstance(
-        &SpObjectTokenCategory,
-        None,
-        CLSCTX_ALL,
-    ).map_err(|e| format!("创建音频输入类别失败: {:?}", e))?;
+    let cat: ISpObjectTokenCategory = CoCreateInstance(&SpObjectTokenCategory, None, CLSCTX_ALL)
+        .map_err(|e| format!("创建音频输入类别失败: {:?}", e))?;
 
     cat.SetId(SPCAT_AUDIOIN, false)
         .map_err(|e| format!("设置音频输入类别失败: {:?}", e))?;
 
-    let token_id = cat.GetDefaultTokenId()
+    let token_id = cat
+        .GetDefaultTokenId()
         .map_err(|e| format!("获取默认音频输入失败: {:?}", e))?;
 
-    let audio_token: ISpObjectToken = CoCreateInstance(
-        &SpObjectToken,
-        None,
-        CLSCTX_ALL,
-    ).map_err(|e| format!("创建音频 Token 失败: {:?}", e))?;
+    let audio_token: ISpObjectToken = CoCreateInstance(&SpObjectToken, None, CLSCTX_ALL)
+        .map_err(|e| format!("创建音频 Token 失败: {:?}", e))?;
 
-    audio_token.SetId(None, windows::core::PCWSTR(token_id.as_ptr()), false)
+    audio_token
+        .SetId(None, windows::core::PCWSTR(token_id.as_ptr()), false)
         .map_err(|e| format!("设置音频 Token ID 失败: {:?}", e))?;
 
     CoTaskMemFree(Some(token_id.as_ptr() as *const _));
@@ -71,29 +61,35 @@ unsafe fn run_sapi_session_inner(
         .map_err(|e| format!("设置音频输入失败: {:?}", e))?;
 
     // 3. 创建识别上下文
-    let context: ISpRecoContext = reco.CreateRecoContext()
+    let context: ISpRecoContext = reco
+        .CreateRecoContext()
         .map_err(|e| format!("创建识别上下文失败: {:?}", e))?;
 
     // 4. 设置关注的事件：HYPOTHESIS（中间结果）+ RECOGNITION（最终结果）
     let interest = spfei(SPEI_HYPOTHESIS.0 as u64) | spfei(SPEI_RECOGNITION.0 as u64);
-    context.SetInterest(interest, interest)
+    context
+        .SetInterest(interest, interest)
         .map_err(|e| format!("设置事件兴趣失败: {:?}", e))?;
 
     // 5. 创建并加载听写语法
-    let grammar: ISpRecoGrammar = context.CreateGrammar(0)
+    let grammar: ISpRecoGrammar = context
+        .CreateGrammar(0)
         .map_err(|e| format!("创建语法失败: {:?}", e))?;
 
-    grammar.LoadDictation(None, SPLOADOPTIONS(0))
+    grammar
+        .LoadDictation(None, SPLOADOPTIONS(0))
         .map_err(|e| format!("加载听写语法失败: {:?}", e))?;
 
-    grammar.SetDictationState(SPRS_ACTIVE)
+    grammar
+        .SetDictationState(SPRS_ACTIVE)
         .map_err(|e| format!("激活听写失败: {:?}", e))?;
 
     let _ = event_tx.send(AsrEvent::Connected);
     log::info!("[asr-sapi] SAPI session started, dictation active");
 
     // 6. 获取事件通知句柄
-    let notify: ISpNotifySource = context.cast()
+    let notify: ISpNotifySource = context
+        .cast()
         .map_err(|e| format!("获取通知源失败: {:?}", e))?;
     let wait_handle = notify.GetNotifyEventHandle();
     if wait_handle.0.is_null() {
@@ -111,10 +107,7 @@ unsafe fn run_sapi_session_inner(
         }
 
         // 等待事件，100ms 超时后重新检查 is_running
-        let wait_result = windows::Win32::System::Threading::WaitForSingleObject(
-            wait_handle,
-            100,
-        );
+        let wait_result = windows::Win32::System::Threading::WaitForSingleObject(wait_handle, 100);
 
         if wait_result == windows::Win32::Foundation::WAIT_OBJECT_0 {
             // 有事件，逐个处理
@@ -232,11 +225,8 @@ pub fn test_sapi_available() -> std::result::Result<String, String> {
             return Err(format!("COM 初始化失败: {:?}", hr));
         }
 
-        let result: windows::core::Result<ISpRecognizer> = CoCreateInstance(
-            &SpInprocRecognizer,
-            None,
-            CLSCTX_ALL,
-        );
+        let result: windows::core::Result<ISpRecognizer> =
+            CoCreateInstance(&SpInprocRecognizer, None, CLSCTX_ALL);
 
         CoUninitialize();
 

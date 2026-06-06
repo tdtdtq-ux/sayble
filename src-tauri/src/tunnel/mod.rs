@@ -2,7 +2,9 @@ mod config;
 mod manager;
 mod process;
 
-pub use config::{TunnelConfig, TunnelLogEntry, TunnelLogLevel, TunnelRunState, TunnelStatus};
+pub use config::{
+    TunnelConfig, TunnelDirection, TunnelLogEntry, TunnelLogLevel, TunnelRunState, TunnelStatus,
+};
 pub use manager::TunnelManager;
 
 #[tauri::command]

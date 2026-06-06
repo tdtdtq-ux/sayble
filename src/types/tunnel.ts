@@ -7,10 +7,13 @@ export type TunnelRunState =
 
 export type TunnelLogLevel = "info" | "warn" | "error" | "success";
 
+export type TunnelDirection = "local" | "remote";
+
 export interface TunnelConfig {
   id: string;
   name: string;
   sshHost: string;
+  direction: TunnelDirection;
   localHost: string;
   localPort: number;
   remoteHost: string;

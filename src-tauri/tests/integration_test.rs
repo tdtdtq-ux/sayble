@@ -1,9 +1,9 @@
-use sayble_lib::config::*;
 use sayble_lib::asr::protocol::*;
-use sayble_lib::audio::AudioCapture;
-use sayble_lib::asr::VolcEngineAsr;
 use sayble_lib::asr::volcengine::run_asr_session;
 use sayble_lib::asr::AsrEvent;
+use sayble_lib::asr::VolcEngineAsr;
+use sayble_lib::audio::AudioCapture;
+use sayble_lib::config::*;
 
 /// 集成测试：完整配置 → ASR 验证 → 状态流转
 #[test]
@@ -100,7 +100,10 @@ fn test_full_config_persistence_flow() {
     let restored: AppConfig = serde_json::from_str(&json).unwrap();
 
     // 4. 验证所有字段
-    assert_eq!(restored.toggle_hotkey.binding.modifiers, vec![Modifier::RightCtrl]);
+    assert_eq!(
+        restored.toggle_hotkey.binding.modifiers,
+        vec![Modifier::RightCtrl]
+    );
     assert_eq!(restored.toggle_hotkey.binding.key, 0);
     assert_eq!(restored.asr.app_id, "my_app");
     assert_eq!(restored.output_mode, OutputMode::Clipboard);
@@ -155,7 +158,12 @@ fn decode_mp3_to_pcm(path: &std::path::Path) -> Vec<i16> {
     hint.with_extension("mp3");
 
     let probed = symphonia::default::get_probe()
-        .format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())
+        .format(
+            &hint,
+            mss,
+            &FormatOptions::default(),
+            &MetadataOptions::default(),
+        )
         .expect("Failed to probe MP3");
 
     let mut format = probed.format;
@@ -266,7 +274,9 @@ async fn test_asr_with_mp3_file() {
     let event_tx_clone = event_tx.clone();
     let is_running_clone = is_running.clone();
     let asr_handle = tokio::spawn(async move {
-        if let Err(e) = run_asr_session(config, event_tx_clone.clone(), audio_rx, is_running_clone).await {
+        if let Err(e) =
+            run_asr_session(config, event_tx_clone.clone(), audio_rx, is_running_clone).await
+        {
             let _ = event_tx_clone.send(AsrEvent::Error(e));
         }
     });
@@ -274,7 +284,10 @@ async fn test_asr_with_mp3_file() {
     // 4. 分块发送音频数据（模拟实时流，每块 3200 samples = 200ms @16kHz）
     let chunk_size = 3200;
     for chunk in pcm_samples.chunks(chunk_size) {
-        audio_tx.send(chunk.to_vec()).await.expect("Failed to send audio chunk");
+        audio_tx
+            .send(chunk.to_vec())
+            .await
+            .expect("Failed to send audio chunk");
         // 按实际音频时长节奏发送，3200 samples @16kHz = 200ms
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     }
@@ -325,7 +338,11 @@ async fn test_asr_with_mp3_file() {
 
     // 6. 验证结果
     assert!(got_connected, "Never received Connected event");
-    assert!(!final_text.is_empty(), "Final result is empty. Events: {:?}", all_events);
+    assert!(
+        !final_text.is_empty(),
+        "Final result is empty. Events: {:?}",
+        all_events
+    );
     println!("=== Final recognition result: {} ===", final_text);
 
     // 预期内容: "豆包流式语音识别模型"
