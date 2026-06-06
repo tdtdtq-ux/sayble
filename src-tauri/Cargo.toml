@@ -1,6 +1,6 @@
 [package]
 name = "sayble"
-version = "0.2.9"
+version = "0.2.11"
 description = "Sayble - 跨平台桌面语音输入工具"
 authors = ["you"]
 edition = "2021"
@@ -14,7 +14,7 @@ tauri-build = { version = "2", features = [] }
 chrono = "0.4"
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri = { version = "2.11", features = ["tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-single-instance = "2"
@@ -33,6 +33,7 @@ uuid = { version = "1", features = ["v4"] }
 log = "0.4"
 dirs = "6"
 tauri-plugin-log = "2"
+tauri-plugin-dialog = "2"
 byteorder = "1"
 url = "2"
 reqwest = { version = "0.13.2", default-features = false, features = ["rustls", "json"] }

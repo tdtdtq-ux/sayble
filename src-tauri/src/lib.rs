@@ -736,6 +736,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -829,8 +830,8 @@ pub fn run() {
             tunnel_manager.start_autostart_tunnels();
             app.manage(tunnel_manager);
 
-            // 本地共享 Web 服务：默认关闭，用户在共享页手动启动
-            let share_manager = ShareManager::init()
+            // 本地共享 Web 服务：应用启动后常驻，手机扫码访问共享文件列表
+            let share_manager = ShareManager::init(handle.clone())
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
             app.manage(share_manager);
 
@@ -991,6 +992,15 @@ pub fn run() {
             share::cmd_add_share_file,
             share::cmd_remove_share_file,
             share::cmd_clear_share_files,
+            share::cmd_set_share_upload_dir,
+            share::cmd_accept_share_upload,
+            share::cmd_reject_share_upload,
+            share::cmd_accept_share_upload_batch,
+            share::cmd_reject_share_upload_batch,
+            share::cmd_clear_share_uploads,
+            share::cmd_add_share_content,
+            share::cmd_remove_share_content,
+            share::cmd_clear_share_contents,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

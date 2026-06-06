@@ -23,6 +23,7 @@
     "core:window:allow-is-maximized",
     "core:window:allow-toggle-maximize",
     "autostart:default",
+    "dialog:default",
     "log:default"
   ]
 }
