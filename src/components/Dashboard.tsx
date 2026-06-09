@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Settings, Home, UserRound, History, Cable, Share2, Mic2 } from "lucide-react";
+import { Settings, Home, UserRound, History, Cable, Share2, Mic2, MonitorPlay } from "lucide-react";
 import { ShellLayout, type ShellMenuItem } from "./ShellLayout";
 import { HomePage } from "./HomePage";
 import { RecorderPage } from "./RecorderPage";
@@ -7,12 +7,14 @@ import { PersonaPage } from "./PersonaPage";
 import { HistoryPage } from "./HistoryPage";
 import { TunnelPage } from "@/features/tunnels/TunnelPage";
 import { SharePage } from "@/features/share/SharePage";
+import { LiveWindowSettings } from "./LiveWindowSettings";
 
 const menuItems: readonly ShellMenuItem[] = [
   { key: "home", label: "首页", icon: Home },
   { key: "recorder", label: "录音", icon: Mic2 },
   { key: "history", label: "历史", icon: History },
   { key: "persona", label: "人设", icon: UserRound },
+  { key: "live", label: "直播", icon: MonitorPlay },
   { key: "tunnels", label: "隧道", icon: Cable },
   { key: "share", label: "共享", icon: Share2 },
 ] as const;
@@ -47,6 +49,7 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
       {activeTab === "recorder" && <RecorderPage />}
       {activeTab === "history" && <HistoryPage />}
       {activeTab === "persona" && <PersonaPage />}
+      {activeTab === "live" && <LiveWindowSettings />}
       {activeTab === "tunnels" && <TunnelPage />}
       {activeTab === "share" && <SharePage />}
     </ShellLayout>

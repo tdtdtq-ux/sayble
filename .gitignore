@@ -25,6 +25,7 @@ dist-ssr
 
 # Claude Code
 .claude/
+.superpowers/
 
 # UI designs (unused)
 /ui/

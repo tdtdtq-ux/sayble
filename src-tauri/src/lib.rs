@@ -3,6 +3,7 @@ pub mod audio;
 pub mod config;
 pub mod hotkey;
 pub mod input;
+pub mod live_window;
 pub mod polish;
 pub mod share;
 pub mod store;
@@ -1085,6 +1086,12 @@ pub fn run() {
             cmd_check_update,
             cmd_inject_key_event,
             cmd_show_floating_window,
+            live_window::cmd_open_live_window,
+            live_window::cmd_live_window_navigate,
+            live_window::cmd_live_window_reload,
+            live_window::cmd_live_window_go_back,
+            live_window::cmd_live_window_go_forward,
+            live_window::cmd_live_window_close,
             tunnel::cmd_list_tunnels,
             tunnel::cmd_save_tunnel,
             tunnel::cmd_delete_tunnel,

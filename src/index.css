@@ -68,6 +68,12 @@
     background: transparent;
     overflow: hidden;
   }
+  html.live-browser-nav-window,
+  html.live-browser-nav-window body,
+  html.live-browser-nav-window #root {
+    background: var(--color-background);
+    overflow: hidden;
+  }
 }
 
 /* 数字/英文展示字体 */

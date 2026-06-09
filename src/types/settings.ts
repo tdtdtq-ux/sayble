@@ -1,3 +1,5 @@
+import type { LiveWindowConfig } from "./liveWindow";
+
 export interface AudioDevice {
   name: string;
   is_default: boolean;
@@ -10,6 +12,7 @@ export interface AppSettings {
   autoOutput: boolean;
   toggleHotkey: string;
   deviceId: string;
+  liveWindows: LiveWindowConfig[];
 }
 
 export const defaultSettings: AppSettings = {
@@ -19,4 +22,5 @@ export const defaultSettings: AppSettings = {
   autoOutput: true,
   toggleHotkey: "右Ctrl",
   deviceId: "",
+  liveWindows: [],
 };

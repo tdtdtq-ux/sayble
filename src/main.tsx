@@ -4,6 +4,7 @@ import ReactDOM from "react-dom/client";
 import { attachConsole } from "@tauri-apps/plugin-log";
 import App from "./App";
 import { FloatingApp } from "./components/FloatingApp";
+import { LiveWindowNavApp } from "./components/LiveWindowNavApp";
 import { TunnelNotificationApp } from "@/features/tunnels/TunnelNotificationApp";
 
 // 将后端 Rust 日志转发到浏览器 DevTools 控制台（方便开发调试）
@@ -18,6 +19,8 @@ if (windowType === "floating") {
   document.documentElement.classList.add("floating-window");
 } else if (windowType === "tunnel-notification") {
   document.documentElement.classList.add("tunnel-notification-window");
+} else if (windowType === "live-browser-nav") {
+  document.documentElement.classList.add("live-browser-nav-window");
 }
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
@@ -26,6 +29,8 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       ? <FloatingApp />
       : windowType === "tunnel-notification"
         ? <TunnelNotificationApp />
+        : windowType === "live-browser-nav"
+          ? <LiveWindowNavApp />
         : <App />}
   </React.StrictMode>,
 );
