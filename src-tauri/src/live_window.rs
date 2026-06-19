@@ -8,6 +8,11 @@ pub const LIVE_WINDOW_MIN_CONTENT_WIDTH: u32 = 200;
 pub const LIVE_WINDOW_MIN_CONTENT_HEIGHT: u32 = 200;
 pub const LIVE_WINDOW_MAX_CONTENT_WIDTH: u32 = 3840;
 pub const LIVE_WINDOW_MAX_CONTENT_HEIGHT: u32 = 3840;
+pub const LIVE_WINDOW_CAMERA_SIZE: f64 = 300.0;
+pub const LIVE_WINDOW_CAMERA_MARGIN: f64 = 24.0;
+pub const LIVE_WINDOW_CAMERA_EDGE_GUARD: f64 = 2.0;
+pub const LIVE_WINDOW_CAMERA_SHADOW_PADDING: f64 = 96.0;
+pub const LIVE_WINDOW_CHILD_EDGE_OVERLAP: u32 = 4;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -17,6 +22,16 @@ pub struct LiveWindowOpenRequest {
     pub url: String,
     pub width: u32,
     pub height: u32,
+    pub camera_device_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveCameraBounds {
+    pub x: i32,
+    pub y: i32,
+    pub camera_size: u32,
+    pub view_size: u32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -24,6 +39,7 @@ pub struct LiveWindowLabels {
     pub window: String,
     pub nav: String,
     pub content: String,
+    pub camera: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -38,6 +54,10 @@ pub struct LiveWindowChildLayout {
     pub nav_height: u32,
     pub content_y: i32,
     pub content_height: u32,
+    pub camera_x: i32,
+    pub camera_y: i32,
+    pub camera_size: u32,
+    pub camera_view_size: u32,
     pub total_height: u32,
 }
 
@@ -49,6 +69,7 @@ pub fn build_live_window_labels(id: &str) -> LiveWindowLabels {
         window: base.clone(),
         nav: format!("live-window-nav-{}", safe_id),
         content: format!("live-content-{}", safe_id),
+        camera: format!("live-window-camera-{}", safe_id),
     }
 }
 
@@ -71,24 +92,76 @@ pub fn live_window_uses_system_decorations() -> bool {
     false
 }
 
+pub fn live_camera_overlay_url(
+    id: &str,
+    camera_device_id: Option<String>,
+    initial_bounds: Option<LiveCameraBounds>,
+) -> String {
+    let mut url = format!(
+        "index.html?window=live-camera-overlay&id={}",
+        encode_query(id)
+    );
+    if let Some(bounds) = initial_bounds {
+        url.push_str(&format!(
+            "&x={}&y={}&cameraSize={}",
+            bounds.x, bounds.y, bounds.camera_size
+        ));
+    }
+
+    match camera_device_id.and_then(|value| {
+        let trimmed = value.trim().to_string();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    }) {
+        Some(device_id) => {
+            url.push_str(&format!("&deviceId={}", encode_query(&device_id)));
+            url
+        }
+        None => url,
+    }
+}
+
+pub fn live_camera_view_size(camera_size: u32, scale_factor: f64) -> u32 {
+    let scale = normalized_scale_factor(scale_factor);
+    let padding = scale_dimension(LIVE_WINDOW_CAMERA_SHADOW_PADDING, scale);
+    camera_size.saturating_add(padding.saturating_mul(2))
+}
+
 pub fn live_window_child_layout(
     request: &LiveWindowOpenRequest,
     scale_factor: f64,
 ) -> LiveWindowChildLayout {
-    let scale = if scale_factor.is_finite() && scale_factor > 0.0 {
-        scale_factor
-    } else {
-        1.0
-    };
+    let scale = normalized_scale_factor(scale_factor);
     let width = scale_dimension(request.width as f64, scale);
     let nav_height = scale_dimension(LIVE_WINDOW_NAV_HEIGHT, scale);
     let content_height = scale_dimension(request.height as f64, scale);
+    let camera_size = scale_dimension(LIVE_WINDOW_CAMERA_SIZE, scale);
+    let camera_margin = scale_dimension(LIVE_WINDOW_CAMERA_MARGIN, scale);
+    let camera_edge_guard = scale_dimension(LIVE_WINDOW_CAMERA_EDGE_GUARD, scale);
+    let camera_shadow_padding = scale_dimension(LIVE_WINDOW_CAMERA_SHADOW_PADDING, scale);
+    let camera_view_size = live_camera_view_size(camera_size, scale);
+    let camera_x = width
+        .saturating_sub(camera_size.saturating_add(camera_margin))
+        .saturating_sub(camera_shadow_padding)
+        .saturating_sub(camera_edge_guard) as i32;
+    let camera_y = nav_height
+        .saturating_add(content_height)
+        .saturating_sub(camera_size.saturating_add(camera_margin))
+        .saturating_sub(camera_shadow_padding)
+        .saturating_sub(camera_edge_guard) as i32;
 
     LiveWindowChildLayout {
         width,
         nav_height,
         content_y: nav_height as i32,
         content_height,
+        camera_x,
+        camera_y,
+        camera_size,
+        camera_view_size,
         total_height: nav_height.saturating_add(content_height),
     }
 }
@@ -184,7 +257,12 @@ pub async fn cmd_open_live_window(
         .add_child(
             nav_builder,
             tauri::PhysicalPosition::new(0, 0),
-            tauri::PhysicalSize::new(child_layout.width, child_layout.nav_height),
+            tauri::PhysicalSize::new(
+                child_layout
+                    .width
+                    .saturating_add(LIVE_WINDOW_CHILD_EDGE_OVERLAP),
+                child_layout.nav_height,
+            ),
         )
         .map_err(|e| format!("创建直播窗口导航栏失败: {}", e))?;
 
@@ -209,9 +287,40 @@ pub async fn cmd_open_live_window(
         .add_child(
             content_builder,
             tauri::PhysicalPosition::new(0, child_layout.content_y),
-            tauri::PhysicalSize::new(child_layout.width, child_layout.content_height),
+            tauri::PhysicalSize::new(
+                child_layout
+                    .width
+                    .saturating_add(LIVE_WINDOW_CHILD_EDGE_OVERLAP),
+                child_layout.content_height,
+            ),
         )
         .map_err(|e| format!("创建直播窗口网页内容失败: {}", e))?;
+
+    let camera_builder = tauri::webview::WebviewBuilder::new(
+        labels.camera.clone(),
+        WebviewUrl::App(
+            live_camera_overlay_url(
+                &instance_id,
+                config.camera_device_id.clone(),
+                Some(LiveCameraBounds {
+                    x: child_layout.camera_x,
+                    y: child_layout.camera_y,
+                    camera_size: child_layout.camera_size,
+                    view_size: child_layout.camera_view_size,
+                }),
+            )
+            .into(),
+        ),
+    )
+    .transparent(true);
+
+    window
+        .add_child(
+            camera_builder,
+            tauri::PhysicalPosition::new(child_layout.camera_x, child_layout.camera_y),
+            tauri::PhysicalSize::new(child_layout.camera_view_size, child_layout.camera_view_size),
+        )
+        .map_err(|e| format!("创建直播窗口摄像头失败: {}", e))?;
     register_live_window_resize_handler(&app, &window, labels.clone(), config.clone());
 
     window
@@ -256,7 +365,10 @@ fn resize_live_window_children(
         if let Err(e) = nav.set_position(tauri::PhysicalPosition::new(0, 0)) {
             log::warn!("[live-window] failed to reposition nav webview: {}", e);
         }
-        if let Err(e) = nav.set_size(tauri::PhysicalSize::new(layout.width, layout.nav_height)) {
+        if let Err(e) = nav.set_size(tauri::PhysicalSize::new(
+            layout.width.saturating_add(LIVE_WINDOW_CHILD_EDGE_OVERLAP),
+            layout.nav_height,
+        )) {
             log::warn!("[live-window] failed to resize nav webview: {}", e);
         }
     }
@@ -265,10 +377,24 @@ fn resize_live_window_children(
             log::warn!("[live-window] failed to reposition content webview: {}", e);
         }
         if let Err(e) = content.set_size(tauri::PhysicalSize::new(
-            layout.width,
+            layout.width.saturating_add(LIVE_WINDOW_CHILD_EDGE_OVERLAP),
             layout.content_height,
         )) {
             log::warn!("[live-window] failed to resize content webview: {}", e);
+        }
+    }
+    if let Some(camera) = app.get_webview(&labels.camera) {
+        if let Err(e) = camera.set_position(tauri::PhysicalPosition::new(
+            layout.camera_x,
+            layout.camera_y,
+        )) {
+            log::warn!("[live-window] failed to reposition camera webview: {}", e);
+        }
+        if let Err(e) = camera.set_size(tauri::PhysicalSize::new(
+            layout.camera_view_size,
+            layout.camera_view_size,
+        )) {
+            log::warn!("[live-window] failed to resize camera webview: {}", e);
         }
     }
 }
@@ -384,6 +510,14 @@ fn live_window_content_webview(app: &tauri::AppHandle, id: &str) -> Result<tauri
 
 fn scale_dimension(value: f64, scale_factor: f64) -> u32 {
     (value * scale_factor).round().max(1.0) as u32
+}
+
+fn normalized_scale_factor(scale_factor: f64) -> f64 {
+    if scale_factor.is_finite() && scale_factor > 0.0 {
+        scale_factor
+    } else {
+        1.0
+    }
 }
 
 fn encode_query(value: &str) -> String {

@@ -4,6 +4,7 @@ export interface LiveWindowConfig {
   url: string;
   width: number;
   height: number;
+  cameraDeviceId?: string;
 }
 
 export interface LiveWindowSettings {
@@ -68,18 +69,25 @@ export function validateLiveWindow(config: LiveWindowConfig): LiveWindowConfig |
   const url = normalizeLiveWindowUrl(config.url);
   const width = Math.round(config.width);
   const height = Math.round(config.height);
+  const cameraDeviceId = config.cameraDeviceId?.trim();
 
   if (!config.id || !name || !url) return null;
   if (!isDimensionInRange(width, LIVE_WINDOW_MIN_WIDTH, LIVE_WINDOW_MAX_WIDTH)) return null;
   if (!isDimensionInRange(height, LIVE_WINDOW_MIN_HEIGHT, LIVE_WINDOW_MAX_HEIGHT)) return null;
 
-  return {
+  const validated: LiveWindowConfig = {
     id: config.id,
     name,
     url,
     width,
     height,
   };
+
+  if (cameraDeviceId) {
+    validated.cameraDeviceId = cameraDeviceId;
+  }
+
+  return validated;
 }
 
 function clampDimension(value: number, min: number, max: number): number {

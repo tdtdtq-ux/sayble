@@ -74,6 +74,12 @@
     background: var(--color-background);
     overflow: hidden;
   }
+  html.live-camera-overlay-window,
+  html.live-camera-overlay-window body,
+  html.live-camera-overlay-window #root {
+    background: transparent;
+    overflow: hidden;
+  }
 }
 
 /* 数字/英文展示字体 */

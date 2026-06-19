@@ -1,6 +1,7 @@
 use sayble_lib::live_window::{
-    build_live_window_labels, centered_live_window_position, live_window_child_layout,
-    live_window_size, live_window_uses_system_decorations, parse_live_window_url,
+    build_live_window_labels, centered_live_window_position, live_camera_overlay_url,
+    live_camera_view_size, live_window_child_layout, live_window_size,
+    live_window_uses_system_decorations, parse_live_window_url, LiveCameraBounds,
     LiveWindowOpenRequest, LIVE_WINDOW_NAV_HEIGHT,
 };
 
@@ -11,6 +12,7 @@ fn builds_stable_labels_from_id() {
     assert_eq!(labels.window, "live-window-bilibili-dashboard");
     assert_eq!(labels.nav, "live-window-nav-bilibili-dashboard");
     assert_eq!(labels.content, "live-content-bilibili-dashboard");
+    assert_eq!(labels.camera, "live-window-camera-bilibili-dashboard");
 }
 
 #[test]
@@ -19,6 +21,7 @@ fn keeps_external_content_label_out_of_live_window_permission_scope() {
 
     assert!(labels.window.starts_with("live-window-"));
     assert!(labels.nav.starts_with("live-window-"));
+    assert!(labels.camera.starts_with("live-window-"));
     assert!(!labels.content.starts_with("live-window-"));
 }
 
@@ -38,6 +41,7 @@ fn adds_navigation_height_to_parent_window() {
         url: "https://example.com".to_string(),
         width: 900,
         height: 1200,
+        camera_device_id: None,
     };
 
     let size = live_window_size(&request);
@@ -59,6 +63,7 @@ fn scales_child_webviews_to_match_dpi_scaled_parent_window() {
         url: "https://example.com".to_string(),
         width: 1400,
         height: 1867,
+        camera_device_id: None,
     };
 
     let layout = live_window_child_layout(&request, 1.5);
@@ -68,6 +73,49 @@ fn scales_child_webviews_to_match_dpi_scaled_parent_window() {
     assert_eq!(layout.content_height, 2801);
     assert_eq!(layout.total_height, 2861);
     assert_eq!(layout.content_y, 60);
+}
+
+#[test]
+fn positions_camera_overlay_at_content_bottom_right() {
+    let request = LiveWindowOpenRequest {
+        id: "id-1".to_string(),
+        name: "直播后台".to_string(),
+        url: "https://example.com".to_string(),
+        width: 1400,
+        height: 1867,
+        camera_device_id: None,
+    };
+
+    let layout = live_window_child_layout(&request, 1.5);
+
+    assert_eq!(layout.camera_size, 450);
+    assert_eq!(layout.camera_view_size, 738);
+    assert_eq!(layout.camera_x, 1467);
+    assert_eq!(layout.camera_y, 2228);
+}
+
+#[test]
+fn passes_selected_camera_device_to_overlay_url() {
+    let url = live_camera_overlay_url(
+        "window-1",
+        Some("camera id/一".to_string()),
+        Some(LiveCameraBounds {
+            x: 10,
+            y: 50,
+            camera_size: 240,
+            view_size: 432,
+        }),
+    );
+
+    assert_eq!(
+        url,
+        "index.html?window=live-camera-overlay&id=window-1&x=10&y=50&cameraSize=240&deviceId=camera+id%2F%E4%B8%80"
+    );
+}
+
+#[test]
+fn camera_view_size_keeps_room_for_shadow() {
+    assert_eq!(live_camera_view_size(240, 1.5), 528);
 }
 
 #[test]

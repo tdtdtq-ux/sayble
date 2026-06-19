@@ -4,6 +4,7 @@ import ReactDOM from "react-dom/client";
 import { attachConsole } from "@tauri-apps/plugin-log";
 import App from "./App";
 import { FloatingApp } from "./components/FloatingApp";
+import { LiveCameraOverlayApp } from "./components/LiveCameraOverlayApp";
 import { LiveWindowNavApp } from "./components/LiveWindowNavApp";
 import { TunnelNotificationApp } from "@/features/tunnels/TunnelNotificationApp";
 
@@ -21,6 +22,8 @@ if (windowType === "floating") {
   document.documentElement.classList.add("tunnel-notification-window");
 } else if (windowType === "live-browser-nav") {
   document.documentElement.classList.add("live-browser-nav-window");
+} else if (windowType === "live-camera-overlay") {
+  document.documentElement.classList.add("live-camera-overlay-window");
 }
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
@@ -31,6 +34,8 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
         ? <TunnelNotificationApp />
         : windowType === "live-browser-nav"
           ? <LiveWindowNavApp />
+          : windowType === "live-camera-overlay"
+            ? <LiveCameraOverlayApp />
         : <App />}
   </React.StrictMode>,
 );

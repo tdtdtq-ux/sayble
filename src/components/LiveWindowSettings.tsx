@@ -1,10 +1,17 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
-import { Check, ExternalLink, Plus, Trash2 } from "lucide-react";
+import { Check, ExternalLink, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import {
@@ -15,6 +22,11 @@ import {
   type LiveWindowConfig,
   type LiveWindowPresetValue,
 } from "@/types/liveWindow";
+
+interface CameraDevice {
+  deviceId: string;
+  label: string;
+}
 
 function createLiveWindow(): LiveWindowConfig {
   return {
@@ -43,6 +55,8 @@ export function LiveWindowSettings() {
   const [activeId, setActiveId] = useState<string>(liveWindows[0]?.id ?? "");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [cameraDevices, setCameraDevices] = useState<CameraDevice[]>([]);
+  const [loadingCameras, setLoadingCameras] = useState(false);
 
   const activeWindow = useMemo(
     () => liveWindows.find((item) => item.id === activeId) ?? liveWindows[0],
@@ -50,6 +64,10 @@ export function LiveWindowSettings() {
   );
 
   const activePreset = getPresetValue(activeWindow);
+
+  useEffect(() => {
+    listCameraDevices().then(setCameraDevices).catch(() => setCameraDevices([]));
+  }, []);
 
   const setLiveWindows = (next: LiveWindowConfig[]) => {
     updateAppSetting("liveWindows", next);
@@ -110,6 +128,35 @@ export function LiveWindowSettings() {
       toast.error(`${e}`);
     } finally {
       setOpeningId(null);
+    }
+  };
+
+  const handleRefreshCameras = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast.error("当前环境不支持摄像头访问");
+      return;
+    }
+
+    setLoadingCameras(true);
+    try {
+      const stream = await withTimeout(
+        navigator.mediaDevices.getUserMedia({ video: true, audio: false }),
+        15000,
+      );
+      stream.getTracks().forEach((track) => track.stop());
+
+      const devices = await listCameraDevices();
+      setCameraDevices(devices);
+      if (devices.length === 0) {
+        toast.error("没有找到摄像头设备");
+      } else {
+        toast.success("摄像头列表已刷新");
+      }
+    } catch (error) {
+      console.error("[live-window] failed to refresh cameras:", error);
+      toast.error("摄像头授权失败或超时");
+    } finally {
+      setLoadingCameras(false);
     }
   };
 
@@ -259,6 +306,41 @@ export function LiveWindowSettings() {
                     />
                   </div>
                 </div>
+
+                <div className="flex items-center gap-4">
+                  <Label className="shrink-0 w-24 text-muted-foreground">摄像头</Label>
+                  <div className="flex flex-1 min-w-0 items-center gap-2">
+                    <Select
+                      value={activeWindow.cameraDeviceId || "default"}
+                      onValueChange={(value) =>
+                        updateLiveWindow(activeWindow.id, {
+                          cameraDeviceId: value === "default" ? undefined : value,
+                        })
+                      }
+                    >
+                      <SelectTrigger className="flex-1 min-w-0">
+                        <SelectValue placeholder="选择摄像头" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">系统默认摄像头</SelectItem>
+                        {cameraDevices.map((device, index) => (
+                          <SelectItem key={device.deviceId} value={device.deviceId}>
+                            {device.label || `摄像头 ${index + 1}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={loadingCameras}
+                      onClick={handleRefreshCameras}
+                    >
+                      <RefreshCw className="size-3.5 mr-1" />
+                      授权/刷新
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -270,4 +352,32 @@ export function LiveWindowSettings() {
       </div>
     </div>
   );
+}
+
+async function listCameraDevices(): Promise<CameraDevice[]> {
+  if (!navigator.mediaDevices?.enumerateDevices) return [];
+
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  return devices
+    .filter((device) => device.kind === "videoinput" && device.deviceId)
+    .map((device) => ({
+      deviceId: device.deviceId,
+      label: device.label,
+    }));
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => reject(new Error("timeout")), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
 }

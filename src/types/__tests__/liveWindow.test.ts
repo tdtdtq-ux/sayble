@@ -42,12 +42,14 @@ describe("live window settings", () => {
       url: "live.example.com/dashboard",
       width: 900,
       height: 1200,
+      cameraDeviceId: "  camera-1  ",
     })).toEqual({
       id: "1",
       name: "直播后台",
       url: "https://live.example.com/dashboard",
       width: 900,
       height: 1200,
+      cameraDeviceId: "camera-1",
     });
   });
 });
